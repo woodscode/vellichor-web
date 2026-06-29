@@ -1,0 +1,18 @@
+# Secrets — NEVER commit
+.env
+
+# Runtime data: uploads, job workdirs, outputs, voice samples, ambience beds,
+# Hugging Face model cache, job history
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp

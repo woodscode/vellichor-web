@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Audiblez · Sign in</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="login-body">
+  <form id="loginForm" class="login-card">
+    <div class="logo">🎧</div>
+    <h1>Audiblez</h1>
+    <p class="muted">Turn your stories into audiobooks</p>
+    <input type="password" id="password" placeholder="Password" autofocus autocomplete="current-password" />
+    <button type="submit">Sign in</button>
+    <div id="err" class="login-err"></div>
+  </form>
+  <script>
+    const f = document.getElementById('loginForm');
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = document.getElementById('err');
+      err.textContent = '';
+      const r = await fetch('/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: document.getElementById('password').value }),
+      });
+      if (r.ok) { location.href = '/'; }
+      else { err.textContent = 'Incorrect password'; }
+    });
+  </script>
+</body>
+</html>

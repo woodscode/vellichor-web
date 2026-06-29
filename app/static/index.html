@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Audiblez · Audiobook Studio</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">🎧</span> Audiblez <span class="tag">Studio</span></div>
+    <div class="topbar-right">
+      <span id="device" class="chip" title="Compute device"></span>
+      <button id="logoutBtn" class="ghost" title="Sign out">Sign out</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ============ LEFT: compose ============ -->
+    <section class="panel compose">
+      <div class="tabs">
+        <button class="tab active" data-tab="write">✍️ Write a story</button>
+        <button class="tab" data-tab="upload">📄 Upload a file</button>
+      </div>
+
+      <div class="tabpane active" id="pane-write">
+        <input id="storyTitle" class="field" placeholder="Story title (e.g. The Dragon Who Lost His Roar)" />
+        <textarea id="storyText" class="field story" placeholder="Once upon a time…
+
+Write or paste your story here. Use # Heading lines to split it into chapters."></textarea>
+        <div class="hint">Tip: lines starting with <code># </code> become chapter breaks.</div>
+      </div>
+
+      <div class="tabpane" id="pane-upload">
+        <div id="dropzone" class="dropzone">
+          <div class="dz-icon">⬆️</div>
+          <div><strong>Drop a file here</strong> or click to browse</div>
+          <div class="muted small">.txt · .md · .epub · .pdf · .docx</div>
+          <input type="file" id="fileInput" accept=".txt,.md,.markdown,.epub,.pdf,.docx" hidden />
+        </div>
+        <div id="fileChosen" class="file-chosen" hidden></div>
+      </div>
+    </section>
+
+    <!-- ============ MIDDLE: voice picker ============ -->
+    <section class="panel voices">
+      <div class="panel-head">
+        <h2>Choose a voice</h2>
+        <input id="voiceSearch" class="field small-field" placeholder="Search voices…" />
+      </div>
+      <div class="voice-filters" id="voiceFilters">
+        <button class="pill active" data-filter="story">⭐ For stories</button>
+        <button class="pill" data-filter="all">All</button>
+        <button class="pill" data-filter="female">Female</button>
+        <button class="pill" data-filter="male">Male</button>
+        <button class="pill" data-filter="American">🇺🇸 US</button>
+        <button class="pill" data-filter="British">🇬🇧 UK</button>
+        <button class="pill" data-filter="other">🌍 Other</button>
+      </div>
+      <div id="voiceList" class="voice-list"></div>
+    </section>
+
+    <!-- ============ RIGHT: settings + go ============ -->
+    <aside class="panel settings">
+      <h2>Settings</h2>
+
+      <label class="lbl">Selected voice</label>
+      <div id="selectedVoice" class="selected-voice">—</div>
+
+      <label class="lbl">Reading speed · <span id="speedVal">1.0×</span></label>
+      <input type="range" id="speed" min="0.5" max="1.5" step="0.05" value="1.0" />
+
+      <label class="lbl">Author / narrator label</label>
+      <input id="author" class="field" placeholder="Audiblez" />
+
+      <label class="lbl">Cover image (optional)</label>
+      <input type="file" id="coverInput" class="field" accept=".jpg,.jpeg,.png" />
+
+      <label class="lbl">Output formats</label>
+      <div class="checks">
+        <label><input type="checkbox" id="fmtM4b" checked /> Chaptered M4B</label>
+        <label><input type="checkbox" id="fmtMp3" checked /> MP3 (per chapter)</label>
+      </div>
+
+      <label class="check-row"><input type="checkbox" id="exportAbs" checked />
+        Add to Audiobookshelf library</label>
+
+      <div class="actions">
+        <button id="previewBtn" class="ghost full">▶ Preview voice on this text</button>
+        <button id="convertBtn" class="primary full">🎬 Create audiobook</button>
+      </div>
+      <audio id="previewAudio" hidden></audio>
+    </aside>
+  </main>
+
+  <!-- ============ STUDIO: cast + ambience ============ -->
+  <section class="panel studio jobs-panel">
+    <div class="studio-grid">
+      <div class="studio-col">
+        <div class="studio-head">
+          <h2>🎭 Multi-voice cast</h2>
+          <label class="switch"><input type="checkbox" id="multiVoice" /><span>Enable</span></label>
+        </div>
+        <p class="muted small">Give each character their own voice. Use
+          <code>[Name]</code> tags in your story for exact control, e.g.
+          <code>[Pip] "I can do it!"</code> — or let Audiblez detect speakers automatically.</p>
+        <div id="castArea" class="cast-area" hidden>
+          <button id="analyzeBtn" class="ghost full">🔎 Analyze story for characters</button>
+          <div id="castHint" class="muted small"></div>
+          <div id="castList" class="cast-list"></div>
+        </div>
+      </div>
+
+      <div class="studio-col">
+        <h2>🎵 Background ambience</h2>
+        <label class="lbl">Ambience bed</label>
+        <select id="ambienceSelect" class="field"><option value="">None</option></select>
+        <div class="amb-row">
+          <button id="ambPlay" class="ghost">▶ Preview</button>
+          <label class="upload-mini">＋ Upload your own
+            <input type="file" id="ambienceFile" accept=".mp3,.wav,.m4a,.ogg,.flac" hidden /></label>
+        </div>
+        <div id="ambUploadName" class="muted small"></div>
+        <label class="lbl">Volume · <span id="ambVolVal">12%</span></label>
+        <input type="range" id="ambVol" min="0" max="40" step="1" value="12" />
+        <label class="check-row"><input type="checkbox" id="ducking" checked />
+          Auto-duck music under narration</label>
+        <audio id="ambAudio" hidden></audio>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ JOBS ============ -->
+  <section class="panel jobs-panel">
+    <h2>Conversions</h2>
+    <div id="jobs" class="jobs"></div>
+  </section>
+
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

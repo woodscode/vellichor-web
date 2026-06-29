@@ -1,0 +1,25 @@
+services:
+  audiblez-web:
+    build: .
+    image: audiblez-web:latest
+    container_name: audiblez-web
+    restart: unless-stopped
+    runtime: nvidia
+    ports:
+      - "7777:7777"
+    environment:
+      # GPU
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+      # Auth (set in .env)
+      AUDIBLEZ_PASSWORD: "${AUDIBLEZ_PASSWORD}"
+      SECRET_KEY: "${SECRET_KEY}"
+      # Own exported audiobooks as the Audiobookshelf user so ABS can read them
+      ABS_UID: "911"
+      ABS_GID: "911"
+      # Optional: push a notification when a conversion finishes
+      # (your ntfy lives at http://192.168.8.165:8087/<topic>, gotify at :8070)
+      NOTIFY_URL: "${NOTIFY_URL:-}"
+    volumes:
+      - ./data:/data
+      - /mnt/user/eMedia/eMedia/Audiobooks:/library
