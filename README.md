@@ -17,10 +17,16 @@ GTX 1080. Built for writing & converting stories.
   committing to a full conversion.
 - Reading-speed slider, optional cover art, author label.
 - **Live progress** (stage, segment count, ETA) + per-job log.
-- **🎭 Multi-voice cast** — give each character their own voice. Tag speakers
-  with `[Name]` in your story for exact control, e.g.
-  `[Pip] "I can do it!"`, or let it auto-detect from quotes & dialogue tags.
-  "Analyze story for characters" builds an editable cast list.
+- **🎭 Multi-voice cast** — give each character their own voice. Three ways:
+  - **🪄 Smart cast (AI)** — a local Ollama model (Llama 3.2 3B) reads the story,
+    attributes each line to a speaker, and auto-inserts `[Name]` tags for you to
+    review. Best for messy/untagged dialogue. Falls back to Quick detect if the
+    model isn't ready.
+  - **🔎 Quick detect** — fast rule-based: quotes + dialogue tags, with gender
+    inference (honorifics + pronouns) to pick matching-gender voices.
+  - **`[Name]` markup** — tag speakers yourself for exact control, e.g.
+    `[Pip] "I can do it!"`.
+  The cast panel lets you assign/preview a voice per character before converting.
 - **🎵 Background ambience** — mix a bed under the narration: built-in
   license-free beds (Soft Rain, Gentle Night, Warm Hum, Dreamy Pad), or upload
   your own / drop files in `data/ambience/`. Volume slider + auto-ducking
@@ -38,6 +44,16 @@ docker compose logs -f          # watch logs
 docker compose down             # stop
 docker compose up -d --build    # rebuild after editing app/ code
 ```
+
+## AI Smart cast (Ollama)
+The `ollama` service (in docker-compose) runs the local LLM on the GPU. After
+first `docker compose up -d`, pull the model once:
+```bash
+docker exec audiblez-ollama ollama pull llama3.2:3b
+```
+Both models share the 1080; `OLLAMA_KEEP_ALIVE=2m` unloads the LLM from VRAM
+after use so Kokoro has room. To try a more accurate (heavier) model, pull it
+and set `SMARTCAST_MODEL` in `.env` (e.g. `qwen2.5:7b`), then `up -d`.
 
 ## Configuration (`.env`)
 - `AUDIBLEZ_PASSWORD` — login password (change anytime, then `up -d`).

@@ -14,6 +14,7 @@ import auth
 import voices as voicecat
 import cast as castmod
 import ambience as amb
+import smartcast
 from tts import ENGINE
 from jobs import MANAGER
 
@@ -104,6 +105,27 @@ async def analyze_cast(request: Request):
         return {"characters": [], "has_markup": False}
     return {"characters": castmod.detect_characters(text),
             "has_markup": castmod.has_markup(text)}
+
+
+@app.get("/api/smartcast/status")
+def smartcast_status():
+    return {"available": smartcast.available(), "model": smartcast.MODEL}
+
+
+@app.post("/api/smartcast")
+async def smartcast_analyze(request: Request):
+    """AI speaker attribution: returns [Name]-tagged text + characters."""
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        return {"tagged": "", "characters": []}
+    if not smartcast.available():
+        raise HTTPException(503, "AI model not ready yet (Ollama still loading or "
+                                 "the model is downloading). Try again shortly.")
+    try:
+        return smartcast.analyze(text)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"Smart cast failed: {e}")
 
 
 @app.get("/api/ambience")

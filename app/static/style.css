@@ -144,6 +144,9 @@ button { font: inherit; }
 .studio-head { display: flex; align-items: center; justify-content: space-between; }
 .switch { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: .85rem; color: var(--muted); }
 .cast-area { margin-top: 14px; }
+.cast-btns { display: flex; gap: 8px; }
+.cast-btns button { flex: 1; }
+.cast-btns .primary { flex: 1.4; }
 .cast-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .cast-row { display: flex; align-items: center; gap: 10px; background: var(--bg);
   border: 1px solid var(--border); border-radius: 11px; padding: 8px 11px; }

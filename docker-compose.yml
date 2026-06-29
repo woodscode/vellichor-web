@@ -20,6 +20,24 @@ services:
       # Optional: push a notification when a conversion finishes
       # (your ntfy lives at http://192.168.8.165:8087/<topic>, gotify at :8070)
       NOTIFY_URL: "${NOTIFY_URL:-}"
+      # AI "Smart cast" — local Ollama model for speaker attribution
+      OLLAMA_URL: "http://ollama:11434"
+      SMARTCAST_MODEL: "${SMARTCAST_MODEL:-llama3.2:3b}"
     volumes:
       - ./data:/data
       - /mnt/user/eMedia/eMedia/Audiobooks:/library
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: audiblez-ollama
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+      # Unload the model from VRAM 2 min after use, freeing it for Kokoro
+      OLLAMA_KEEP_ALIVE: "2m"
+    volumes:
+      - ./data/ollama:/root/.ollama

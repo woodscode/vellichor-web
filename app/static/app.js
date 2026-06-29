@@ -273,6 +273,36 @@ $('#multiVoice').addEventListener('change', (e) => {
   $('#castArea').hidden = !e.target.checked;
 });
 
+async function checkSmartcast() {
+  try {
+    const r = await fetch('/api/smartcast/status');
+    const d = await r.json();
+    const btn = $('#smartBtn');
+    if (d.available) { btn.disabled = false; btn.title = 'AI model: ' + d.model; }
+    else { btn.disabled = false; btn.title = 'AI model still loading/downloading'; }
+  } catch (e) {}
+}
+
+$('#smartBtn').addEventListener('click', async () => {
+  const text = $('#storyText').value.trim();
+  if (!text) { toast('Write or paste a story first', 'bad'); return; }
+  const btn = $('#smartBtn'); btn.disabled = true; btn.textContent = '🪄 Thinking…';
+  try {
+    const r = await fetch('/api/smartcast', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (r.status === 503) { toast('AI model still loading — try again in a moment', 'bad'); throw 0; }
+    if (!r.ok) throw 0;
+    const data = await r.json();
+    $('#storyText').value = data.tagged;          // show the AI-inserted [Name] tags
+    renderCast({ characters: data.characters, has_markup: true });
+    $('#castHint').textContent = '🪄 AI tagged your story with [Name] markup — review/edit it above, then create your audiobook.';
+    toast('AI cast ready — story tagged ✨', 'good');
+  } catch (e) { if (e !== 0) toast('Smart cast failed', 'bad'); }
+  btn.disabled = false; btn.textContent = '🪄 Smart cast (AI)';
+});
+
 $('#analyzeBtn').addEventListener('click', async () => {
   const text = $('#storyText').value.trim();
   if (!text) { toast('Write or paste a story first', 'bad'); return; }
@@ -369,5 +399,6 @@ $('#logoutBtn').addEventListener('click', async () => {
 // ---------- boot ----------
 loadVoices();
 loadAmbience();
+checkSmartcast();
 refreshJobs();
 setInterval(refreshJobs, 1500);
