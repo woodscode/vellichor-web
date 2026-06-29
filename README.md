@@ -27,6 +27,9 @@ GTX 1080. Built for writing & converting stories.
   - **`[Name]` markup** — tag speakers yourself for exact control, e.g.
     `[Pip] "I can do it!"`.
   The cast panel lets you assign/preview a voice per character before converting.
+  Works for **uploaded files too**: multi-voice auto-assigns distinct gender-matched
+  voices to detected characters with zero setup, and 🔎/🪄 read the file's text so
+  you can review/override the cast first.
 - **🎵 Background ambience** — mix a bed under the narration: built-in
   license-free beds (Soft Rain, Gentle Night, Warm Hum, Dreamy Pad), or upload
   your own / drop files in `data/ambience/`. Volume slider + auto-ducking

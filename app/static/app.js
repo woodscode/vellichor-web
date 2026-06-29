@@ -283,39 +283,67 @@ async function checkSmartcast() {
   } catch (e) {}
 }
 
+function onUploadTab() {
+  return $('.tab[data-tab="upload"]').classList.contains('active');
+}
+function switchToWrite() { $('.tab[data-tab="write"]').click(); }
+
+async function extractFileText() {
+  const fd = new FormData(); fd.append('file', chosenFile);
+  const r = await fetch('/api/extract', { method: 'POST', body: fd });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'extract failed'); }
+  return (await r.json()).text;
+}
+
+// Source text for cast analysis: the editor, or an uploaded file's contents.
+async function castSourceText() {
+  if (onUploadTab() && chosenFile) return await extractFileText();
+  return $('#storyText').value.trim();
+}
+
 $('#smartBtn').addEventListener('click', async () => {
-  const text = $('#storyText').value.trim();
-  if (!text) { toast('Write or paste a story first', 'bad'); return; }
   const btn = $('#smartBtn'); btn.disabled = true; btn.textContent = '🪄 Thinking…';
   try {
+    const fromFile = onUploadTab() && chosenFile;
+    const text = fromFile ? await extractFileText() : $('#storyText').value.trim();
+    if (!text) { toast('Write a story or choose a file first', 'bad'); return; }
+    if (text.length > 15000 &&
+        !confirm('This is a long text — AI Smart cast may take several minutes. ' +
+                 'Continue? (Quick detect is instant.)')) return;
     const r = await fetch('/api/smartcast', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     });
-    if (r.status === 503) { toast('AI model still loading — try again in a moment', 'bad'); throw 0; }
-    if (!r.ok) throw 0;
+    if (r.status === 503) { toast('AI model still loading — try again in a moment', 'bad'); return; }
+    if (!r.ok) throw new Error();
     const data = await r.json();
-    $('#storyText').value = data.tagged;          // show the AI-inserted [Name] tags
+    // AI rewrites the text with [Name] tags, so it becomes the source we convert
+    $('#storyText').value = data.tagged;
+    if (fromFile) {
+      switchToWrite(); chosenFile = null;
+      $('#fileChosen').hidden = true; $('#fileInput').value = '';
+      toast('Imported & tagged from file ✨', 'good');
+    } else {
+      toast('AI cast ready — story tagged ✨', 'good');
+    }
     renderCast({ characters: data.characters, has_markup: true });
     $('#castHint').textContent = '🪄 AI tagged your story with [Name] markup — review/edit it above, then create your audiobook.';
-    toast('AI cast ready — story tagged ✨', 'good');
-  } catch (e) { if (e !== 0) toast('Smart cast failed', 'bad'); }
-  btn.disabled = false; btn.textContent = '🪄 Smart cast (AI)';
+  } catch (e) { toast('Smart cast failed', 'bad'); }
+  finally { btn.disabled = false; btn.textContent = '🪄 Smart cast (AI)'; }
 });
 
 $('#analyzeBtn').addEventListener('click', async () => {
-  const text = $('#storyText').value.trim();
-  if (!text) { toast('Write or paste a story first', 'bad'); return; }
   const btn = $('#analyzeBtn'); btn.disabled = true; btn.textContent = '◌ Analyzing…';
   try {
+    const text = await castSourceText();
+    if (!text) { toast('Write a story or choose a file first', 'bad'); return; }
     const r = await fetch('/api/analyze', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     });
-    const data = await r.json();
-    renderCast(data);
-  } catch { toast('Analysis failed', 'bad'); }
-  btn.disabled = false; btn.textContent = '🔎 Analyze story for characters';
+    renderCast(await r.json());
+  } catch (e) { toast('Analysis failed: ' + (e.message || ''), 'bad'); }
+  finally { btn.disabled = false; btn.textContent = '🔎 Quick detect'; }
 });
 
 function renderCast(data) {

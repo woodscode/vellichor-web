@@ -154,3 +154,31 @@ def build_segments(text: str, narrator_voice: str, cast_map: dict):
             voice = cmap.get(key) or narrator_voice
         out.append({"speaker": sp, "voice": voice, "text": body})
     return out
+
+
+# Default voice palettes for auto-assignment (kept in sync with the frontend).
+FEMALE_VOICES = ["af_bella", "bf_emma", "af_nova", "af_nicole", "bf_isabella", "af_sarah"]
+MALE_VOICES = ["am_michael", "am_fenrir", "bm_george", "am_puck", "bm_fable", "am_onyx"]
+ANY_VOICES = ["af_bella", "am_michael", "bf_emma", "am_fenrir", "af_nova", "bm_george"]
+
+
+def auto_cast(text: str, narrator_voice: str, user_map: dict = None):
+    """Build a complete cast_map: keep any user assignments, then auto-assign a
+    distinct, gender-matched voice to every other detected character.
+
+    This is what makes multi-voice work with zero manual setup (e.g. uploads).
+    """
+    user = {_norm(k).lower(): v for k, v in (user_map or {}).items() if v}
+    result = dict(user)
+    result.setdefault(NARRATOR.lower(), narrator_voice)
+    used = {narrator_voice} | set(user.values())
+    for c in detect_characters(text):
+        key = c["name"].lower()
+        if key in result:
+            continue
+        pal = (FEMALE_VOICES if c.get("gender") == "female"
+               else MALE_VOICES if c.get("gender") == "male" else ANY_VOICES)
+        pick = next((v for v in pal if v not in used), pal[0])
+        result[key] = pick
+        used.add(pick)
+    return result

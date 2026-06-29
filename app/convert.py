@@ -13,6 +13,7 @@ from tts import ENGINE, SAMPLE_RATE
 import extract as extractor
 import cast as castmod
 import ambience as amb
+import voices as voicecat
 
 LIBRARY_DIR = "/library"           # bind-mounted Audiobookshelf library
 ABS_UID = int(os.environ.get("ABS_UID", "911"))
@@ -107,6 +108,17 @@ def run(job: dict, progress) -> dict:
 
     title = safe_name(job.get("title") or detected_title)
     author = job.get("author") or "Audiblez"
+
+    # Auto-cast: fill in a distinct, gender-matched voice for every detected
+    # character (works even with no manual assignments, e.g. uploaded books).
+    if multivoice:
+        full_text = "\n\n".join(c["text"] for c in chapters)
+        cast_map = castmod.auto_cast(full_text, voice, cast_map)
+        pretty = ", ".join(
+            f"{('Narrator' if k == 'narrator' else k.title())}→"
+            f"{(voicecat.get(v) or {}).get('name', v)}"
+            for k, v in list(cast_map.items())[:14])
+        progress(log=f"Cast: {pretty}")
 
     # ---- 2. Plan segments/chunks (for accurate progress) ----------------
     for ch in chapters:

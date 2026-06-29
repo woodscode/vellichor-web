@@ -128,6 +128,29 @@ async def smartcast_analyze(request: Request):
         raise HTTPException(500, f"Smart cast failed: {e}")
 
 
+@app.post("/api/extract")
+async def extract_endpoint(file: UploadFile = File(...)):
+    """Extract an uploaded file to [#-chaptered] plain text for cast analysis."""
+    if not file or not file.filename:
+        raise HTTPException(400, "No file provided")
+    from extract import SUPPORTED_EXTS, extract as do_extract
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in SUPPORTED_EXTS:
+        raise HTTPException(400, f"Unsupported file type: {ext}")
+    tmp = os.path.join(UPLOAD_DIR, f"ex_{uuid.uuid4().hex}{ext}")
+    with open(tmp, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    try:
+        chapters, title = do_extract(tmp)
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+    text = "\n\n".join(f"# {c['title']}\n{c['text']}" for c in chapters)
+    return {"text": text, "title": title, "chapters": len(chapters)}
+
+
 @app.get("/api/ambience")
 def ambience_list():
     return {"beds": amb.list_beds()}
