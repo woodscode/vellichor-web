@@ -76,9 +76,15 @@ function selectVoice(id) {
   if (v) $('#selectedVoice').innerHTML = `${v.flag} ${v.name} · <span class="muted">${v.accent} ${v.gender}</span>`;
 }
 
+function stopAllAudio() {
+  try { sampleAudio.pause(); } catch (e) {}
+  ['previewAudio', 'ambAudio'].forEach(id => { const a = $('#' + id); if (a) a.pause(); });
+  const amb = $('#ambPlay'); if (amb) amb.textContent = '▶ Preview';
+}
+
 function playSample(id, btn) {
+  stopAllAudio();
   btn.classList.add('loading'); btn.textContent = '◌';
-  sampleAudio.pause();
   sampleAudio.src = `/api/voice-sample/${id}`;
   sampleAudio.play()
     .then(() => { btn.classList.remove('loading'); btn.textContent = '▶'; })
@@ -134,6 +140,7 @@ $('#previewBtn').addEventListener('click', async () => {
     });
     if (!r.ok) throw new Error();
     const blob = await r.blob();
+    stopAllAudio();
     const a = $('#previewAudio'); a.src = URL.createObjectURL(blob); a.play();
   } catch { toast('Preview failed', 'bad'); }
   btn.disabled = false; btn.textContent = '▶ Preview voice on this text';
@@ -234,8 +241,15 @@ function renderJobs(jobs) {
 }
 
 // ---------- multi-voice cast ----------
-const CAST_PALETTE = ['af_bella', 'am_michael', 'bf_emma', 'am_fenrir', 'af_nova',
-  'bm_george', 'af_nicole', 'am_puck', 'bf_isabella', 'bm_fable', 'am_santa'];
+const FEMALE_PALETTE = ['af_bella', 'bf_emma', 'af_nova', 'af_nicole', 'bf_isabella', 'af_sarah'];
+const MALE_PALETTE = ['am_michael', 'am_fenrir', 'bm_george', 'am_puck', 'bm_fable', 'am_onyx'];
+const ANY_PALETTE = ['af_bella', 'am_michael', 'bf_emma', 'am_fenrir', 'af_nova', 'bm_george'];
+
+function pickVoice(gender, used) {
+  const pal = gender === 'female' ? FEMALE_PALETTE
+    : gender === 'male' ? MALE_PALETTE : ANY_PALETTE;
+  return pal.find(v => !used.has(v)) || pal[0];
+}
 
 function voiceSelect(value) {
   const sel = document.createElement('select');
@@ -283,14 +297,17 @@ function renderCast(data) {
   if (!data.characters || !data.characters.length) {
     list.innerHTML = '<div class="muted small">No characters detected.</div>'; return;
   }
-  let pi = 0;
+  const used = new Set([selected]);
   for (const c of data.characters) {
     const isNarr = c.name.toLowerCase() === 'narrator';
-    let dflt = isNarr ? selected : CAST_PALETTE[pi++ % CAST_PALETTE.length];
-    if (!isNarr && dflt === selected) dflt = CAST_PALETTE[pi++ % CAST_PALETTE.length];
+    let dflt;
+    if (isNarr) { dflt = selected; }
+    else { dflt = pickVoice(c.gender, used); used.add(dflt); }
+    const gicon = c.gender === 'female' ? ' <span class="gender f">♀</span>'
+      : c.gender === 'male' ? ' <span class="gender m">♂</span>' : '';
     const row = document.createElement('div');
     row.className = 'cast-row'; row.dataset.name = c.name;
-    row.innerHTML = `<div class="cast-name">${isNarr ? '📖' : '🗣️'} ${c.name}
+    row.innerHTML = `<div class="cast-name">${isNarr ? '📖' : '🗣️'} ${c.name}${gicon}
         <span class="muted small">${c.lines} line${c.lines === 1 ? '' : 's'}</span></div>`;
     const sel = voiceSelect(dflt);
     const play = document.createElement('button');
@@ -325,13 +342,25 @@ $('#ambienceFile').addEventListener('change', (e) => {
   ambUpload = e.target.files[0] || null;
   $('#ambUploadName').textContent = ambUpload ? '📁 ' + ambUpload.name + ' (will be used)' : '';
 });
+const ambAudioEl = $('#ambAudio');
+ambAudioEl.addEventListener('ended', () => $('#ambPlay').textContent = '▶ Preview');
 $('#ambPlay').addEventListener('click', () => {
-  const a = $('#ambAudio');
-  if (ambUpload) { a.src = URL.createObjectURL(ambUpload); a.play(); return; }
-  const id = $('#ambienceSelect').value;
-  if (!id) { toast('Pick an ambience bed first', 'bad'); return; }
-  a.src = `/api/ambience-sample/${encodeURIComponent(id)}`; a.play();
+  const btn = $('#ambPlay');
+  if (!ambAudioEl.paused) { stopAllAudio(); return; }  // toggle off
+  let src;
+  if (ambUpload) { src = URL.createObjectURL(ambUpload); }
+  else {
+    const id = $('#ambienceSelect').value;
+    if (!id) { toast('Pick an ambience bed first', 'bad'); return; }
+    src = `/api/ambience-sample/${encodeURIComponent(id)}`;
+  }
+  stopAllAudio();
+  ambAudioEl.src = src;
+  ambAudioEl.play().then(() => btn.textContent = '⏸ Stop')
+    .catch(() => toast('Could not play preview', 'bad'));
 });
+// stop ambience preview if the user switches beds
+$('#ambienceSelect').addEventListener('change', stopAllAudio);
 
 $('#logoutBtn').addEventListener('click', async () => {
   await fetch('/api/logout', { method: 'POST' }); location.href = '/login';

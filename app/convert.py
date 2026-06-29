@@ -31,6 +31,28 @@ def _ffmpeg(args):
     subprocess.run(["ffmpeg", "-y", *args], check=True, capture_output=True)
 
 
+def _ffmpeg_progress(args, total_ms, progress, base, span, stage):
+    """Run ffmpeg, parsing -progress so long encodes report smooth progress."""
+    proc = subprocess.Popen(
+        ["ffmpeg", "-y", "-nostats", "-progress", "pipe:1", *args],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    last = -1
+    for line in proc.stdout:
+        line = line.strip()
+        if line.startswith("out_time_us=") and total_ms > 0:
+            try:
+                cur_ms = int(line.split("=", 1)[1]) / 1000.0
+            except ValueError:
+                continue
+            pct = base + min(span, int(cur_ms / total_ms * span))
+            if pct != last:
+                last = pct
+                progress(stage=stage, percent=pct)
+    proc.wait()
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed ({proc.returncode})")
+
+
 def _wav_duration_ms(path: str) -> int:
     info = sf.info(path)
     return int(round(info.frames / info.samplerate * 1000))
@@ -110,7 +132,7 @@ def run(job: dict, progress) -> dict:
                 elapsed = time.time() - t0
                 rate = done / elapsed if elapsed > 0 else 0
                 eta = int((total_chunks - done) / rate) if rate > 0 else None
-                pct = 4 + int(done / total_chunks * 78)
+                pct = 4 + int(done / total_chunks * 76)
                 progress(stage=f"Narrating: {ch['title']}", percent=pct,
                          chapters_done=idx, chunks_done=done, eta=eta)
             if multi_seg:
@@ -123,9 +145,12 @@ def run(job: dict, progress) -> dict:
     # ---- 3b. Mix background ambience ------------------------------------
     bed = job.get("ambience_path") or amb.path_for(job.get("ambience_id"))
     if bed:
-        progress(stage="Adding ambience", percent=84,
+        progress(stage="Adding ambience", percent=80,
                  log="Mixing background sound under the narration…")
-        for cw in chapter_wavs:
+        nch = len(chapter_wavs)
+        for ci, cw in enumerate(chapter_wavs):
+            progress(stage=f"Adding ambience ({ci + 1}/{nch})",
+                     percent=80 + int(ci / max(1, nch) * 4))
             mixed = cw["path"].replace(".wav", "_mix.wav")
             try:
                 amb.mix(cw["path"], bed, mixed,
@@ -142,11 +167,14 @@ def run(job: dict, progress) -> dict:
     formats = job.get("formats", ["m4b", "mp3"])
     cover = job.get("cover")
 
+    nch = len(chapter_wavs)
     if "mp3" in formats:
-        progress(stage="Encoding MP3", percent=86, log="Encoding per-chapter MP3 files…")
+        progress(stage="Encoding MP3", percent=84, log="Encoding per-chapter MP3 files…")
         mp3_dir = os.path.join(out_base, f"{title} (MP3)")
         os.makedirs(mp3_dir, exist_ok=True)
         for i, cw in enumerate(chapter_wavs):
+            progress(stage=f"Encoding MP3 ({i + 1}/{nch})",
+                     percent=84 + int(i / max(1, nch) * 8))
             mp3_path = os.path.join(mp3_dir, f"{i + 1:02d} - {safe_name(cw['title'])}.mp3")
             args = ["-i", cw["path"]]
             if cover:
@@ -174,6 +202,7 @@ def run(job: dict, progress) -> dict:
             dur = _wav_duration_ms(cw["path"])
             chapters_meta.append({"start": cursor, "end": cursor + dur, "title": cw["title"]})
             cursor += dur
+        total_ms = cursor
         meta_path = os.path.join(workdir, "meta.txt")
         _write_ffmetadata(meta_path, title, author, chapters_meta)
 
@@ -185,7 +214,8 @@ def run(job: dict, progress) -> dict:
         if cover:
             args += ["-map", "2:v", "-disposition:v", "attached_pic", "-c:v", "mjpeg"]
         args += ["-c:a", "aac", "-b:a", "96k", m4b_path]
-        _ffmpeg(args)
+        _ffmpeg_progress(args, total_ms, progress, base=92, span=7,
+                         stage="Building audiobook")
         outputs.append({"label": "Audiobook (M4B, chaptered)", "path": m4b_path,
                         "name": os.path.basename(m4b_path), "kind": "m4b"})
 

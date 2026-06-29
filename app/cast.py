@@ -25,8 +25,50 @@ _VERB_AFTER = re.compile(r"^\s*[,]?\s*(?:" + SPEECH_VERBS + r")\s+([A-Z][\w'-]+)
 _VERB_BEFORE = re.compile(r"([A-Z][\w'-]+)\s+(?:" + SPEECH_VERBS + r")\s*[:,]?\s*$")
 
 
+MALE_PRON = re.compile(r"\b(he|him|his|himself)\b", re.I)
+FEMALE_PRON = re.compile(r"\b(she|her|hers|herself)\b", re.I)
+MALE_TITLES = {"mr", "mister", "sir", "king", "prince", "lord", "father", "dad",
+               "daddy", "papa", "grandpa", "grandfather", "uncle", "brother", "boy"}
+FEMALE_TITLES = {"mrs", "ms", "miss", "madam", "lady", "queen", "princess",
+                 "mother", "mom", "mum", "mommy", "mama", "grandma",
+                 "grandmother", "aunt", "sister", "girl"}
+
+
 def _norm(name: str) -> str:
     return re.sub(r"\s+", " ", (name or "")).strip()
+
+
+def _infer_gender(name: str, text: str):
+    """Best-effort gender guess from honorific titles, then nearby pronouns."""
+    for tok in name.lower().replace(".", "").split():
+        if tok in MALE_TITLES:
+            return "male"
+        if tok in FEMALE_TITLES:
+            return "female"
+    namelc = name.lower()
+    low = text.lower()
+    male = female = 0
+    start = 0
+    while True:
+        i = low.find(namelc, start)
+        if i < 0:
+            break
+        # window = the name through the END of the NEXT sentence, where the
+        # referring pronoun usually sits ("…said Ryan. He grinned…"). Stopping
+        # at one sentence keeps it from bleeding into the next character.
+        m1 = re.search(r"[.!?]", text[i:])
+        e1 = i + m1.end() if m1 else len(text)
+        m2 = re.search(r"[.!?]", text[e1:])
+        e2 = e1 + m2.end() if m2 else len(text)
+        window = text[i:e2]
+        male += len(MALE_PRON.findall(window))
+        female += len(FEMALE_PRON.findall(window))
+        start = i + len(namelc)
+    if male > female and male > 0:
+        return "male"
+    if female > male and female > 0:
+        return "female"
+    return None
 
 
 def has_markup(text: str) -> bool:
@@ -93,7 +135,11 @@ def detect_characters(text: str):
         d["chars"] += len(body)
         if not d["sample"]:
             d["sample"] = body[:90]
-    return sorted(agg.values(), key=lambda d: (d["name"] != NARRATOR, -d["chars"]))
+    chars = sorted(agg.values(), key=lambda d: (d["name"] != NARRATOR, -d["chars"]))
+    for c in chars:
+        c["gender"] = (None if c["name"].lower() == NARRATOR.lower()
+                       else _infer_gender(c["name"], text))
+    return chars
 
 
 def build_segments(text: str, narrator_voice: str, cast_map: dict):

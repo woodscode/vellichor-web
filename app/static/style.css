@@ -149,6 +149,9 @@ button { font: inherit; }
   border: 1px solid var(--border); border-radius: 11px; padding: 8px 11px; }
 .cast-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .cast-voice { width: 190px; padding: 7px 10px; }
+.gender { font-size: .85rem; }
+.gender.f { color: #ff8fc7; }
+.gender.m { color: #6cb8ff; }
 select.field { appearance: none; background-image:
   linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
   background-position: calc(100% - 16px) center, calc(100% - 11px) center;
