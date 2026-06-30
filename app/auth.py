@@ -6,12 +6,12 @@ import secrets
 
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
-COOKIE = "audiblez_session"
+COOKIE = "vellichor_session"
 MAX_AGE = 60 * 60 * 24 * 30  # 30 days
 
-PASSWORD = os.environ.get("AUDIBLEZ_PASSWORD", "")
+PASSWORD = os.environ.get("VELLICHOR_PASSWORD", "")
 _secret = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
-_signer = URLSafeTimedSerializer(_secret, salt="audiblez-auth")
+_signer = URLSafeTimedSerializer(_secret, salt="vellichor-auth")
 
 # Auth is disabled entirely if no password is set.
 ENABLED = bool(PASSWORD)

@@ -1,0 +1,14 @@
+# Keep the build context lean — only app/ + requirements are needed for the image.
+.git
+.gitignore
+.env
+.env.example
+data/
+**/__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
+README.md
+docker-compose.yml
+LICENSE

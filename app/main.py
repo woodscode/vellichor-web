@@ -1,4 +1,4 @@
-"""Audiblez Web — FastAPI app: routes, uploads, conversion jobs, downloads."""
+"""Vellichor — FastAPI app: routes, uploads, conversion jobs, downloads."""
 import os
 import shutil
 import threading
@@ -6,6 +6,7 @@ import time
 import uuid
 
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import (JSONResponse, FileResponse, HTMLResponse,
                                RedirectResponse, Response)
 from fastapi.staticfiles import StaticFiles
@@ -15,6 +16,7 @@ import voices as voicecat
 import cast as castmod
 import ambience as amb
 import smartcast
+import gpu
 from tts import ENGINE
 from jobs import MANAGER
 
@@ -23,13 +25,15 @@ UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-app = FastAPI(title="Audiblez Web")
+app = FastAPI(title="Vellichor")
 
 # Pre-generate samples for the story-recommended voices in the background.
 _PREWARM = [v["id"] for v in voicecat.VOICES if v["story"]]
 threading.Thread(target=ENGINE.prewarm, args=(_PREWARM,), daemon=True).start()
-# Generate the built-in ambience beds in the background.
+# Generate the procedural ambience beds, and fetch the recording soundpack
+# (lazy, idempotent — retries any beds a previous run couldn't download).
 threading.Thread(target=amb.ensure_builtins, daemon=True).start()
+threading.Thread(target=amb.ensure_soundpack, daemon=True).start()
 
 
 # ---- auth middleware ----------------------------------------------------
@@ -103,7 +107,8 @@ async def analyze_cast(request: Request):
     text = (body.get("text") or "").strip()
     if not text:
         return {"characters": [], "has_markup": False}
-    return {"characters": castmod.detect_characters(text),
+    characters = await run_in_threadpool(castmod.detect_characters, text)
+    return {"characters": characters,
             "has_markup": castmod.has_markup(text)}
 
 
@@ -119,13 +124,30 @@ async def smartcast_analyze(request: Request):
     text = (body.get("text") or "").strip()
     if not text:
         return {"tagged": "", "characters": []}
-    if not smartcast.available():
+    # Both calls do blocking network/inference work; run them off the event loop
+    # (in the threadpool) so one Smart cast can't freeze the whole server.
+    if not await run_in_threadpool(smartcast.available):
         raise HTTPException(503, "AI model not ready yet (Ollama still loading or "
                                  "the model is downloading). Try again shortly.")
     try:
-        return smartcast.analyze(text)
+        return await run_in_threadpool(smartcast.analyze, text)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(500, f"Smart cast failed: {e}")
+
+
+def _extract_blocking(file_obj, ext):
+    """Copy an upload to a temp file and extract chapters (blocking)."""
+    from extract import extract as do_extract
+    tmp = os.path.join(UPLOAD_DIR, f"ex_{uuid.uuid4().hex}{ext}")
+    with open(tmp, "wb") as f:
+        shutil.copyfileobj(file_obj, f)
+    try:
+        return do_extract(tmp)
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 @app.post("/api/extract")
@@ -133,20 +155,12 @@ async def extract_endpoint(file: UploadFile = File(...)):
     """Extract an uploaded file to [#-chaptered] plain text for cast analysis."""
     if not file or not file.filename:
         raise HTTPException(400, "No file provided")
-    from extract import SUPPORTED_EXTS, extract as do_extract
+    from extract import SUPPORTED_EXTS
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in SUPPORTED_EXTS:
         raise HTTPException(400, f"Unsupported file type: {ext}")
-    tmp = os.path.join(UPLOAD_DIR, f"ex_{uuid.uuid4().hex}{ext}")
-    with open(tmp, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    try:
-        chapters, title = do_extract(tmp)
-    finally:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
+    # File parsing (epub/pdf) is blocking — keep it off the event loop.
+    chapters, title = await run_in_threadpool(_extract_blocking, file.file, ext)
     text = "\n\n".join(f"# {c['title']}\n{c['text']}" for c in chapters)
     return {"text": text, "title": title, "chapters": len(chapters)}
 
@@ -164,6 +178,23 @@ def ambience_sample(bed_id: str):
     return FileResponse(path, media_type="audio/wav")
 
 
+def _preview_blocking(voice, text, speed):
+    """Synthesize + encode a preview clip (blocking GPU/ffmpeg work)."""
+    import soundfile as sf
+    import subprocess
+    pid = uuid.uuid4().hex
+    wav = os.path.join(UPLOAD_DIR, f"prev_{pid}.wav")
+    mp3 = os.path.join(UPLOAD_DIR, f"prev_{pid}.mp3")
+    with gpu.LOCK:
+        gpu.release_ollama()        # reclaim VRAM from Smart cast before TTS
+        audio = ENGINE.synth_chunk(text, voice, speed)
+    sf.write(wav, audio, 24000)
+    subprocess.run(["ffmpeg", "-y", "-i", wav, "-c:a", "libmp3lame", "-q:a", "5", mp3],
+                   check=True, capture_output=True)
+    os.remove(wav)
+    return mp3
+
+
 @app.post("/api/preview")
 async def preview(request: Request):
     """Synthesize a short live preview of arbitrary text in a chosen voice."""
@@ -175,16 +206,7 @@ async def preview(request: Request):
         raise HTTPException(400, "Unknown voice")
     if not text:
         raise HTTPException(400, "Nothing to preview")
-    import soundfile as sf
-    import subprocess
-    pid = uuid.uuid4().hex
-    wav = os.path.join(UPLOAD_DIR, f"prev_{pid}.wav")
-    mp3 = os.path.join(UPLOAD_DIR, f"prev_{pid}.mp3")
-    audio = ENGINE.synth_chunk(text, voice, speed)
-    sf.write(wav, audio, 24000)
-    subprocess.run(["ffmpeg", "-y", "-i", wav, "-c:a", "libmp3lame", "-q:a", "5", mp3],
-                   check=True, capture_output=True)
-    os.remove(wav)
+    mp3 = await run_in_threadpool(_preview_blocking, voice, text, speed)
     return FileResponse(mp3, media_type="audio/mpeg",
                         background=_cleanup(mp3))
 
@@ -208,7 +230,7 @@ async def convert_endpoint(
     voice: str = Form(...),
     speed: float = Form(1.0),
     title: str = Form(""),
-    author: str = Form("Audiblez"),
+    author: str = Form("Vellichor"),
     formats: str = Form("m4b,mp3"),
     export_abs: bool = Form(False),
     text: str = Form(""),
@@ -273,7 +295,7 @@ async def convert_endpoint(
         "source": source,
         "text": text,
         "title": title or "Story",
-        "author": author or "Audiblez",
+        "author": author or "Vellichor",
         "voice": voice,
         "speed": max(0.5, min(2.0, speed)),
         "formats": [f for f in formats.split(",") if f in ("m4b", "mp3")] or ["m4b"],
@@ -300,6 +322,13 @@ def job_get(jid: str):
     if not job:
         raise HTTPException(404, "No such job")
     return job
+
+
+@app.post("/api/jobs/{jid}/cancel")
+def job_cancel(jid: str):
+    if not MANAGER.cancel(jid):
+        raise HTTPException(404, "No active job to cancel")
+    return {"ok": True}
 
 
 @app.delete("/api/jobs/{jid}")

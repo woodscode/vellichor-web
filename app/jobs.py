@@ -104,8 +104,26 @@ class JobManager:
         with self.lock:
             return self.jobs.get(jid)
 
+    def cancel(self, jid):
+        """Signal a running/queued job to stop at the next checkpoint."""
+        with self.lock:
+            job = self.jobs.get(jid)
+            if not job or job["status"] not in ("running", "queued"):
+                return False
+            job["cancel"] = True
+            if job["status"] == "queued":
+                job["status"] = "cancelled"
+                job["stage"] = "Cancelled"
+            else:
+                job["stage"] = "Stopping…"
+            self._save()
+        return True
+
     def delete(self, jid):
         with self.lock:
+            j = self.jobs.get(jid)
+            if j:
+                j["cancel"] = True          # stop the worker if it's still running
             j = self.jobs.pop(jid, None)
             self._save()
         if j:
@@ -158,6 +176,14 @@ class JobManager:
                     job["stage"] = "Done"
                     job["eta"] = 0
                     self._save()
+            except convert.Cancelled:
+                with self.lock:
+                    if jid in self.jobs:
+                        job["status"] = "cancelled"
+                        job["stage"] = "Cancelled"
+                        job["eta"] = None
+                        job["log"].append({"t": time.time(), "msg": "Conversion stopped."})
+                        self._save()
             except Exception as e:  # noqa: BLE001
                 traceback.print_exc()
                 with self.lock:
@@ -182,7 +208,7 @@ class JobManager:
             msg = (f"✅ '{title}' is ready" if status == "done"
                    else f"❌ '{title}' failed: {job.get('error')}")
             req = urllib.request.Request(url, data=msg.encode(),
-                                         headers={"Title": "Audiblez"})
+                                         headers={"Title": "Vellichor"})
             urllib.request.urlopen(req, timeout=5)
         except Exception:
             pass

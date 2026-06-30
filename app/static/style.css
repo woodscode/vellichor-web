@@ -1,3 +1,8 @@
+/* ===== Themes =====
+   :root is the default "Dark" theme. [data-theme="…"] blocks override the
+   palette; everything else in this file reads these variables, so themes need
+   no per-component rules. Set via the header switcher (persisted in
+   localStorage as "vellichor-theme"). */
 :root {
   --bg: #0c0f17;
   --bg-2: #121726;
@@ -13,17 +18,80 @@
   --warn: #ffd166;
   --radius: 14px;
   --shadow: 0 10px 30px rgba(0,0,0,.35);
+  --app-bg:
+    radial-gradient(1200px 600px at 85% -10%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 55%),
+    var(--bg);
+  --topbar-bg: rgba(12,15,23,.7);
+  --log-bg: #0a0d14;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg: #f4f6fb;
+  --bg-2: #eaedf5;
+  --panel: #ffffff;
+  --panel-2: #f0f2f8;
+  --border: #d6dbe8;
+  --text: #1a1f2e;
+  --muted: #5d6577;
+  --accent: #6c5cff;
+  --accent-2: #0e9fd6;
+  --good: #1fa97f;
+  --bad: #e23b3b;
+  --warn: #c8902a;
+  --shadow: 0 10px 30px rgba(20,30,60,.12);
+  --topbar-bg: rgba(244,246,251,.72);
+  --log-bg: #eef1f7;
+  color-scheme: light;
+}
+
+[data-theme="sepia"] {
+  --bg: #f3e9d8;
+  --bg-2: #ece0c9;
+  --panel: #fbf3e4;
+  --panel-2: #efe3cd;
+  --border: #d8c7a6;
+  --text: #3a2f22;
+  --muted: #7a6a52;
+  --accent: #b5793a;
+  --accent-2: #8a6d2f;
+  --good: #5a8a3c;
+  --bad: #b8462f;
+  --warn: #b07d28;
+  --shadow: 0 10px 30px rgba(90,70,40,.18);
+  --topbar-bg: rgba(243,233,216,.75);
+  --log-bg: #e9dcc2;
+  color-scheme: light;
+}
+
+[data-theme="midnight"] {
+  --bg: #05070d;
+  --bg-2: #0a0e18;
+  --panel: #0d1220;
+  --panel-2: #131a2c;
+  --border: #1d2740;
+  --text: #dfe6f5;
+  --muted: #79839e;
+  --accent: #4c9cff;
+  --accent-2: #36d6c3;
+  --good: #38d39f;
+  --bad: #ff6b6b;
+  --warn: #ffd166;
+  --shadow: 0 12px 36px rgba(0,0,0,.55);
+  --topbar-bg: rgba(5,7,13,.78);
+  --log-bg: #04060b;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
-  background:
-    radial-gradient(1200px 600px at 85% -10%, rgba(124,108,255,.18), transparent 60%),
-    radial-gradient(900px 500px at -10% 10%, rgba(76,201,240,.12), transparent 55%),
-    var(--bg);
+  background: var(--app-bg);
+  background-attachment: fixed;
   color: var(--text);
   font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
   min-height: 100vh;
+  transition: color .2s ease;
 }
 h1, h2 { font-weight: 650; letter-spacing: .2px; }
 h2 { font-size: 1.05rem; margin: 0 0 14px; }
@@ -35,7 +103,7 @@ code { background: var(--panel-2); padding: 1px 6px; border-radius: 6px; font-si
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 24px; border-bottom: 1px solid var(--border);
-  background: rgba(12,15,23,.7); backdrop-filter: blur(10px);
+  background: var(--topbar-bg); backdrop-filter: blur(10px);
   position: sticky; top: 0; z-index: 20;
 }
 .brand { font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
@@ -45,6 +113,10 @@ code { background: var(--panel-2); padding: 1px 6px; border-radius: 6px; font-si
 .topbar-right { display: flex; align-items: center; gap: 12px; }
 .chip { font-size: .75rem; color: var(--muted); border: 1px solid var(--border);
   padding: 4px 10px; border-radius: 20px; }
+.theme-select { font: inherit; font-size: .78rem; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 20px;
+  padding: 5px 10px; cursor: pointer; outline: none; transition: border-color .15s; }
+.theme-select:hover, .theme-select:focus { border-color: var(--accent); }
 
 /* ---- layout ---- */
 .layout {
@@ -66,7 +138,7 @@ code { background: var(--panel-2); padding: 1px 6px; border-radius: 6px; font-si
   border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px;
   font: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
 }
-.field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,108,255,.18); }
+.field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
 .field.story { min-height: 320px; resize: vertical; line-height: 1.6; margin-top: 10px; }
 .small-field { width: 180px; padding: 7px 11px; }
 textarea.field { font-family: inherit; }
@@ -86,7 +158,7 @@ textarea.field { font-family: inherit; }
   border: 2px dashed var(--border); border-radius: 14px; padding: 42px 20px;
   text-align: center; cursor: pointer; transition: .15s; color: var(--muted);
 }
-.dropzone:hover, .dropzone.drag { border-color: var(--accent); background: rgba(124,108,255,.06); color: var(--text); }
+.dropzone:hover, .dropzone.drag { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text); }
 .dz-icon { font-size: 2.4rem; margin-bottom: 10px; }
 .file-chosen { margin-top: 14px; padding: 12px 14px; background: var(--panel-2);
   border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; gap: 10px; }
@@ -104,7 +176,7 @@ textarea.field { font-family: inherit; }
   cursor: pointer; transition: .15s;
 }
 .voice-card:hover { border-color: var(--accent-2); transform: translateY(-1px); }
-.voice-card.sel { border-color: var(--accent); background: var(--panel-2); box-shadow: 0 0 0 2px rgba(124,108,255,.25) inset; }
+.voice-card.sel { border-color: var(--accent); background: var(--panel-2); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent) inset; }
 .vc-flag { font-size: 1.5rem; }
 .vc-main { flex: 1; min-width: 0; }
 .vc-name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
@@ -176,6 +248,11 @@ select.field { appearance: none; background-image:
 .status.queued { background: rgba(255,209,102,.15); color: var(--warn); }
 .status.done { background: rgba(56,211,159,.15); color: var(--good); }
 .status.error, .status.interrupted { background: rgba(255,107,107,.15); color: var(--bad); }
+.status.cancelled { background: rgba(139,147,173,.18); color: var(--muted); }
+.job-stop { background: rgba(255,107,107,.12); border: 1px solid rgba(255,107,107,.4);
+  color: var(--bad); padding: 5px 12px; border-radius: 8px; cursor: pointer; font-size: .8rem; transition: .15s; }
+.job-stop:hover { background: var(--bad); color: #fff; }
+.job-stop:disabled { opacity: .6; cursor: default; }
 .progress { height: 9px; background: var(--panel-2); border-radius: 20px; overflow: hidden; margin: 12px 0 8px; }
 .bar { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2));
   border-radius: 20px; transition: width .4s ease; }
@@ -186,7 +263,7 @@ select.field { appearance: none; background-image:
   padding: 8px 14px; border-radius: 10px; font-size: .85rem; transition: .15s; }
 .dl:hover { border-color: var(--accent); background: var(--accent); color: #fff; }
 .log { margin-top: 10px; font-family: ui-monospace, monospace; font-size: .76rem; color: var(--muted);
-  max-height: 96px; overflow-y: auto; background: #0a0d14; border-radius: 8px; padding: 8px 10px; border: 1px solid var(--border); }
+  max-height: 96px; overflow-y: auto; background: var(--log-bg); border-radius: 8px; padding: 8px 10px; border: 1px solid var(--border); }
 .job-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: .9rem; }
 .job-del:hover { color: var(--bad); }
 .exported { color: var(--good); font-size: .82rem; margin-top: 8px; }

@@ -18,6 +18,21 @@ const toast = (msg, kind = '') => {
   setTimeout(() => (t.className = 'toast'), 3500);
 };
 
+// ---------- theme ----------
+// The saved theme is already applied to <html> by the inline <head> script
+// (no-flash). Here we just sync the picker and persist changes.
+(function initTheme() {
+  const sel = $('#themeSelect');
+  if (!sel) return;
+  let saved = 'dark';
+  try { saved = localStorage.getItem('vellichor-theme') || 'dark'; } catch (e) {}
+  sel.value = saved;
+  sel.addEventListener('change', () => {
+    document.documentElement.setAttribute('data-theme', sel.value);
+    try { localStorage.setItem('vellichor-theme', sel.value); } catch (e) {}
+  });
+})();
+
 // ---------- voices ----------
 async function loadVoices() {
   const r = await fetch('/api/voices');
@@ -152,7 +167,7 @@ $('#convertBtn').addEventListener('click', async () => {
   const fd = new FormData();
   fd.append('voice', selected);
   fd.append('speed', $('#speed').value);
-  fd.append('author', $('#author').value || 'Audiblez');
+  fd.append('author', $('#author').value || 'Vellichor');
   fd.append('export_abs', $('#exportAbs').checked);
   const formats = [];
   if ($('#fmtM4b').checked) formats.push('m4b');
@@ -219,7 +234,9 @@ function renderJobs(jobs) {
         </div>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="status ${j.status}">${j.status}</span>
-          <button class="job-del" title="Remove">✕</button>
+          ${showProg
+            ? '<button class="job-stop" title="Stop conversion">■ Stop</button>'
+            : '<button class="job-del" title="Remove">✕</button>'}
         </div>
       </div>
       ${showProg || j.percent ? `<div class="progress"><div class="bar" style="width:${j.percent || 0}%"></div></div>` : ''}
@@ -233,7 +250,13 @@ function renderJobs(jobs) {
       ${j.result?.exported_to ? `<div class="exported">✓ Added to Audiobookshelf</div>` : ''}
       ${dls ? `<div class="downloads">${dls}</div>` : ''}
       ${showProg && log ? `<div class="log">${log}</div>` : ''}`;
-    el.querySelector('.job-del').addEventListener('click', async () => {
+    const stopBtn = el.querySelector('.job-stop');
+    if (stopBtn) stopBtn.addEventListener('click', async () => {
+      stopBtn.disabled = true; stopBtn.textContent = '◌ Stopping…';
+      await fetch('/api/jobs/' + j.id + '/cancel', { method: 'POST' }); refreshJobs();
+    });
+    const delBtn = el.querySelector('.job-del');
+    if (delBtn) delBtn.addEventListener('click', async () => {
       await fetch('/api/jobs/' + j.id, { method: 'DELETE' }); refreshJobs();
     });
     root.appendChild(el);

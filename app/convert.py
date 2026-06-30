@@ -14,12 +14,18 @@ import extract as extractor
 import cast as castmod
 import ambience as amb
 import voices as voicecat
+import gpu
+
+class Cancelled(Exception):
+    """Raised when a job is stopped by the user."""
+
 
 LIBRARY_DIR = "/library"           # bind-mounted Audiobookshelf library
 ABS_UID = int(os.environ.get("ABS_UID", "911"))
 ABS_GID = int(os.environ.get("ABS_GID", "911"))
 GAP = np.zeros(int(SAMPLE_RATE * 0.6), dtype="float32")   # between chapters
 SEG_GAP = np.zeros(int(SAMPLE_RATE * 0.28), dtype="float32")  # between speakers
+TITLE_GAP = np.zeros(int(SAMPLE_RATE * 0.9), dtype="float32")  # after a chapter title
 
 
 def safe_name(name: str) -> str:
@@ -77,16 +83,26 @@ def _chown(path):
 
 
 def _plan_chapter(ch, multivoice, narrator_voice, cast_map):
-    """Return a list of segments: [{voice, chunks:[...]}] for one chapter."""
+    """Return a list of segments: [{voice, chunks:[...]}] for one chapter. A
+    chapter title (when present) is its own leading segment so a pause can
+    follow it before the body begins."""
     if multivoice:
         segs = castmod.build_segments(ch["text"], narrator_voice, cast_map)
-        out = []
+        body = []
         for s in segs:
             chunks = ENGINE.chunk_text(s["text"])
             if chunks:
-                out.append({"voice": s["voice"], "chunks": chunks})
-        return out or [{"voice": narrator_voice, "chunks": ENGINE.chunk_text(ch["text"])}]
-    return [{"voice": narrator_voice, "chunks": ENGINE.chunk_text(ch["text"])}]
+                body.append({"voice": s["voice"], "chunks": chunks})
+        body = body or [{"voice": narrator_voice, "chunks": ENGINE.chunk_text(ch["text"])}]
+    else:
+        body = [{"voice": narrator_voice, "chunks": ENGINE.chunk_text(ch["text"])}]
+
+    spoken_title = ch.get("spoken_title")
+    if spoken_title:
+        tchunks = ENGINE.chunk_text(spoken_title)
+        if tchunks:
+            return [{"voice": narrator_voice, "chunks": tchunks, "title": True}] + body
+    return body
 
 
 def run(job: dict, progress) -> dict:
@@ -107,7 +123,17 @@ def run(job: dict, progress) -> dict:
         raise ValueError("No readable text found in the input.")
 
     title = safe_name(job.get("title") or detected_title)
-    author = job.get("author") or "Audiblez"
+    author = job.get("author") or "Vellichor"
+
+    # Read each chapter's heading aloud as the opening of its narration (so the
+    # title is part of the story), rather than dropping it. Only for titles that
+    # came from a real heading — never a synthetic/default/file-name title.
+    for ch in chapters:
+        if ch.get("heading") and ch["title"].strip():
+            head = ch["title"].strip()
+            if head[-1] not in ".!?:;,":
+                head += "."          # give the narrator a natural sentence beat
+            ch["spoken_title"] = head
 
     # Auto-cast: fill in a distinct, gender-matched voice for every detected
     # character (works even with no manual assignments, e.g. uploaded books).
@@ -131,28 +157,36 @@ def run(job: dict, progress) -> dict:
                  f"Synthesizing on {ENGINE.device.upper()}…")
 
     # ---- 3. Synthesize ---------------------------------------------------
+    # Hold the GPU lock for the whole synth phase and evict the Smart-cast model
+    # from VRAM first, so Kokoro gets the GPU (the two can't coexist on 8 GB).
     chapter_wavs = []
     done = 0
     t0 = time.time()
-    for idx, ch in enumerate(chapters):
-        parts = []
-        multi_seg = len(ch["segments"]) > 1
-        for seg in ch["segments"]:
-            for chunk in seg["chunks"]:
-                parts.append(ENGINE.synth_chunk(chunk, seg["voice"], speed))
-                done += 1
-                elapsed = time.time() - t0
-                rate = done / elapsed if elapsed > 0 else 0
-                eta = int((total_chunks - done) / rate) if rate > 0 else None
-                pct = 4 + int(done / total_chunks * 76)
-                progress(stage=f"Narrating: {ch['title']}", percent=pct,
-                         chapters_done=idx, chunks_done=done, eta=eta)
-            if multi_seg:
-                parts.append(SEG_GAP)
-        audio = np.concatenate(parts) if parts else np.zeros(0, dtype="float32")
-        wav_path = os.path.join(workdir, f"ch{idx:03d}.wav")
-        sf.write(wav_path, audio, SAMPLE_RATE)
-        chapter_wavs.append({"path": wav_path, "title": ch["title"]})
+    with gpu.LOCK:
+        gpu.release_ollama()
+        for idx, ch in enumerate(chapters):
+            parts = []
+            multi_seg = len(ch["segments"]) > 1
+            for seg in ch["segments"]:
+                for chunk in seg["chunks"]:
+                    if job.get("cancel"):
+                        raise Cancelled()
+                    parts.append(ENGINE.synth_chunk(chunk, seg["voice"], speed))
+                    done += 1
+                    elapsed = time.time() - t0
+                    rate = done / elapsed if elapsed > 0 else 0
+                    eta = int((total_chunks - done) / rate) if rate > 0 else None
+                    pct = 4 + int(done / total_chunks * 76)
+                    progress(stage=f"Narrating: {ch['title']}", percent=pct,
+                             chapters_done=idx, chunks_done=done, eta=eta)
+                if seg.get("title"):
+                    parts.append(TITLE_GAP)      # beat after the chapter title
+                elif multi_seg:
+                    parts.append(SEG_GAP)
+            audio = np.concatenate(parts) if parts else np.zeros(0, dtype="float32")
+            wav_path = os.path.join(workdir, f"ch{idx:03d}.wav")
+            sf.write(wav_path, audio, SAMPLE_RATE)
+            chapter_wavs.append({"path": wav_path, "title": ch["title"]})
 
     # ---- 3b. Mix background ambience ------------------------------------
     bed = job.get("ambience_path") or amb.path_for(job.get("ambience_id"))
@@ -171,6 +205,9 @@ def run(job: dict, progress) -> dict:
                 cw["path"] = mixed
             except Exception as e:  # noqa: BLE001
                 progress(log=f"Ambience mix skipped for a chapter: {e}")
+
+    if job.get("cancel"):
+        raise Cancelled()
 
     # ---- 4. Encode outputs ----------------------------------------------
     outputs = []

@@ -3,13 +3,21 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Audiblez · Sign in</title>
+  <script>
+    (function () {
+      try {
+        document.documentElement.setAttribute(
+          'data-theme', localStorage.getItem('vellichor-theme') || 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <title>Vellichor · Sign in</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body class="login-body">
   <form id="loginForm" class="login-card">
     <div class="logo">🎧</div>
-    <h1>Audiblez</h1>
+    <h1>Vellichor</h1>
     <p class="muted">Turn your stories into audiobooks</p>
     <input type="password" id="password" placeholder="Password" autofocus autocomplete="current-password" />
     <button type="submit">Sign in</button>
