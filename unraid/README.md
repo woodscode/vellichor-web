@@ -16,13 +16,38 @@ On your Unraid box:
 5. Apply, then browse to `http://<server-ip>:7777`.
 
 ## AI Smart cast (optional)
-Smart cast needs a separate **Ollama** container (install the official
-`ollama` app from CA). Pull a model in it once:
+Smart cast uses a local **Ollama** LLM to attribute dialogue to speakers. The
+Vellichor container does **not** include Ollama — you run it separately and
+point Vellichor at it. Without it, multi-voice casting falls back to the
+rule-based **Quick detect**, so this is entirely optional.
+
+**1. Run an Ollama container.** Easiest on Unraid: install **Ollama** from
+Community Applications. Or from the command line:
 ```bash
-docker exec <ollama-container> ollama pull llama3.2:3b
+docker run -d --name ollama --restart unless-stopped \
+  --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all \
+  -v /mnt/user/appdata/ollama:/root/.ollama \
+  -p 11434:11434 ollama/ollama
 ```
-Then set **Ollama URL** in the Vellichor template to that container, e.g.
-`http://<ollama-ip>:11434`. Without it, casting uses the rule-based Quick detect.
+Drop the `--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all` flags to run on CPU.
+
+> **Pascal GPUs (GTX 10-series, e.g. the 1080):** recent Ollama dropped the
+> Pascal CUDA build, so the model silently falls back to CPU. Pin a version
+> that still bundles it — use `ollama/ollama:0.30.11` instead of `ollama/ollama`.
+
+**2. Pull the model once** (use your Ollama container's name):
+```bash
+docker exec ollama ollama pull llama3.2:3b
+```
+
+**3. Point Vellichor at it:** set **Ollama URL** in the Vellichor template to
+`http://<unraid-ip>:11434` — use the host IP, not `localhost`, since they're
+separate containers.
+
+On a single GPU, Vellichor hands VRAM back and forth between Kokoro and Ollama
+automatically (it evicts whichever model is idle before the other runs). This
+works across containers via Ollama's API, as long as the Ollama container also
+has GPU access.
 
 ## Getting it into the Community Applications store
 1. Make the GHCR package **public**: GitHub repo → **Packages** →
