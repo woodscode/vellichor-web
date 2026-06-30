@@ -38,6 +38,27 @@ def _norm(name: str) -> str:
     return re.sub(r"\s+", " ", (name or "")).strip()
 
 
+_NAME_STOPWORDS = {
+    "the", "a", "an", "and", "but", "or", "so", "then", "there", "here", "it",
+    "praise", "chapter", "part", "book", "contents", "fiction", "nonfiction",
+    "also", "by", "for", "this", "that", "what", "who", "why", "when", "yes",
+    "no", "oh", "well", "copyright", "isbn", "prologue", "epilogue", "dedication",
+}
+# A plausible character name: 1-3 capitalized words, letters only. Rejects
+# possessives ("Brown's"), ALL-CAPS headings ("PRAISE FOR"), single letters,
+# and common stopwords that dialogue tags sometimes pick up.
+_NAME_RE = re.compile(r"^[A-Z][a-z]+(?:[ -][A-Z][a-z]+){0,2}$")
+
+
+def plausible_name(name: str) -> bool:
+    n = _norm(name)
+    if len(n) < 2 or len(n) > 40:
+        return False
+    if n.lower() in _NAME_STOPWORDS:
+        return False
+    return bool(_NAME_RE.match(n))
+
+
 def _infer_gender(name: str, text: str):
     """Best-effort gender guess from honorific titles, then nearby pronouns."""
     for tok in name.lower().replace(".", "").split():
@@ -75,6 +96,27 @@ def has_markup(text: str) -> bool:
     return bool(TAG.search(text))
 
 
+def _split_tagged_block(name: str, body: str):
+    """Within a [Name] block, voice the quoted dialogue as that character and
+    keep the surrounding narration ("he decided.", scene description) as the
+    Narrator. A block with no quotes is honored as-is (the explicit tag wins)."""
+    if name.lower() == NARRATOR.lower() or not QUOTE_SPAN.search(body):
+        return [(name, body)]
+    spans, idx = [], 0
+    for m in QUOTE_SPAN.finditer(body):
+        pre = body[idx:m.start()].strip()
+        if pre:
+            spans.append((NARRATOR, pre))
+        quote = m.group(1).strip()
+        if quote:
+            spans.append((name, quote))
+        idx = m.end()
+    tail = body[idx:].strip()
+    if tail:
+        spans.append((NARRATOR, tail))
+    return spans
+
+
 def _segment_markup(text: str):
     matches = list(TAG.finditer(text))
     if not matches:
@@ -89,17 +131,16 @@ def _segment_markup(text: str):
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = text[m.end():end].strip()
         if body:
-            segs.append((name, body))
+            segs.extend(_split_tagged_block(name, body))
     return segs
 
 
 def _attribute(after: str, before: str):
-    m = _VERB_AFTER.match(after)
-    if m:
-        return _norm(m.group(1))
-    m = _VERB_BEFORE.search(before)
-    if m:
-        return _norm(m.group(1))
+    for m in (_VERB_AFTER.match(after), _VERB_BEFORE.search(before)):
+        if m:
+            name = _norm(m.group(1))
+            if plausible_name(name):
+                return name
     return None
 
 
@@ -175,6 +216,11 @@ def auto_cast(text: str, narrator_voice: str, user_map: dict = None):
     for c in detect_characters(text):
         key = c["name"].lower()
         if key in result:
+            continue
+        # Only give a distinct voice to a real, recurring character — skip junk
+        # names from front matter and one-off mis-attributions (they read as
+        # narration in the narrator's voice).
+        if not plausible_name(c["name"]) or c["lines"] < 2:
             continue
         pal = (FEMALE_VOICES if c.get("gender") == "female"
                else MALE_VOICES if c.get("gender") == "male" else ANY_VOICES)

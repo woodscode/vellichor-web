@@ -24,10 +24,11 @@ def _split_markdown(text: str, default_title: str):
     def flush():
         body = _clean("\n".join(cur_lines))
         if body:
-            chapters.append({"title": cur_title or default_title, "text": body})
+            chapters.append({"title": cur_title or default_title, "text": body,
+                             "heading": cur_title is not None})
 
     for ln in lines:
-        m = re.match(r"^#{1,2}\s+(.*)$", ln.strip())
+        m = re.match(r"^#{1,6}\s+(.*)$", ln.strip())
         if m:
             flush()
             cur_title, cur_lines = m.group(1).strip(), []
@@ -35,7 +36,7 @@ def _split_markdown(text: str, default_title: str):
             cur_lines.append(ln)
     flush()
     if not chapters:
-        chapters = [{"title": default_title, "text": _clean(text)}]
+        chapters = [{"title": default_title, "text": _clean(text), "heading": False}]
     return chapters
 
 
@@ -58,7 +59,7 @@ def from_pdf(path: str):
     for page in reader.pages:
         parts.append(page.extract_text() or "")
     text = _clean("\n\n".join(parts))
-    return [{"title": title, "text": text}] if text else []
+    return [{"title": title, "text": text, "heading": False}] if text else []
 
 
 def from_docx(path: str):
@@ -71,7 +72,8 @@ def from_docx(path: str):
     def flush():
         body = _clean("\n".join(cur_lines))
         if body:
-            chapters.append({"title": cur_title or title, "text": body})
+            chapters.append({"title": cur_title or title, "text": body,
+                             "heading": cur_title is not None})
 
     for p in doc.paragraphs:
         style = (p.style.name or "").lower() if p.style else ""
@@ -81,7 +83,8 @@ def from_docx(path: str):
         else:
             cur_lines.append(p.text)
     flush()
-    return chapters or [{"title": title, "text": _clean("\n".join(p.text for p in doc.paragraphs))}]
+    return chapters or [{"title": title, "heading": False,
+                         "text": _clean("\n".join(p.text for p in doc.paragraphs))}]
 
 
 def from_epub(path: str):
@@ -100,9 +103,10 @@ def from_epub(path: str):
         text = _clean(soup.get_text("\n"))
         if len(text) < 20:  # skip covers, nav, empty pages
             continue
+        from_heading = ch_title is not None
         if not ch_title:
             ch_title = f"Chapter {len(chapters) + 1}"
-        chapters.append({"title": ch_title, "text": text})
+        chapters.append({"title": ch_title, "text": text, "heading": from_heading})
     return chapters, title
 
 

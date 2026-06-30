@@ -10,6 +10,7 @@ import re
 import requests
 
 import cast as castmod
+import gpu
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://ollama:11434")
 MODEL = os.environ.get("SMARTCAST_MODEL", "llama3.2:3b")
@@ -32,6 +33,10 @@ For EACH quoted line, decide who says it. Use evidence from the text:
   female character just established; it rumbled -> the non-human just mentioned.
 - A split quote joined by a tag ("Because," said Mia, "he is lost.") is ONE
   speaker (Mia) for both halves.
+- Consecutive quotes in the SAME paragraph separated only by a narration beat
+  about that speaker ("...," he decided. "And besides...") are the SAME speaker
+  continuing — do NOT switch speakers unless the text clearly shows someone
+  else now replies.
 - With no tag, infer from who is being addressed and what makes sense; untagged
   exchanges often (not always) alternate between the two speakers present.
 
@@ -64,7 +69,7 @@ def _ask(passage: str, quotes):
         "keep_alive": "30s",
         "options": {"temperature": 0.1, "num_ctx": 8192},
     }
-    r = requests.post(f"{OLLAMA_URL}/api/generate", json=body, timeout=180)
+    r = requests.post(f"{OLLAMA_URL}/api/generate", json=body, timeout=90)
     r.raise_for_status()
     return json.loads(r.json()["response"])
 
@@ -87,11 +92,10 @@ def _clean_name(s) -> str:
     return re.sub(r"\s+", " ", str(s or "")).strip()[:40] or "Character"
 
 
-def analyze(text: str):
-    """Returns {"tagged": <[Name]-tagged text>, "characters": [...]}."""
-    text = (text or "").strip()[:MAX_CHARS]
-    segments, char_gender = [], {}
-
+def _analyze_batches(text: str, segments: list, char_gender: dict):
+    """Run the Ollama attribution batch-by-batch, appending (speaker, body)
+    tuples to `segments` and learned genders to `char_gender`. Assumes the GPU
+    lock is held by the caller."""
     for batch in _batches(text):
         quotes = [m.group(1) for m in QUOTE_SPAN.finditer(batch)]
         if not quotes:
@@ -120,6 +124,21 @@ def analyze(text: str):
             idx, qi = m.end(), qi + 1
         if batch[idx:].strip():
             segments.append((NARRATOR, batch[idx:].strip()))
+
+
+def analyze(text: str):
+    """Returns {"tagged": <[Name]-tagged text>, "characters": [...]}."""
+    text = (text or "").strip()[:MAX_CHARS]
+    segments, char_gender = [], {}
+
+    # Serialize against TTS and free Kokoro's VRAM first, so Ollama offloads the
+    # model to the GPU instead of falling back to (very slow) CPU inference.
+    with gpu.LOCK:
+        gpu.release_kokoro()
+        try:
+            _analyze_batches(text, segments, char_gender)
+        finally:
+            gpu.release_ollama()    # hand the VRAM back to Kokoro
 
     # Canonicalize speaker names so casing variants ("The dragon" / "the dragon")
     # collapse to one character (and therefore one voice).

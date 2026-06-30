@@ -31,6 +31,39 @@ class Engine:
                 self._pipelines[lang_code] = KPipeline(lang_code=lang_code)
             return self._pipelines[lang_code]
 
+    def unload(self):
+        """Drop cached pipelines and release GPU memory, so another model
+        (Ollama, for Smart cast) can claim the VRAM. Pipelines reload lazily
+        on the next synth."""
+        with self._lock:
+            self._pipelines.clear()
+        try:
+            import gc
+            import torch
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:  # noqa: BLE001
+            pass
+
+    @staticmethod
+    def clean_speech_text(text: str) -> str:
+        """Strip Markdown markup so the TTS never vocalizes it (e.g. reading a
+        heading '#' as 'hashtag', or '*' as 'asterisk'). Conservative: only
+        removes formatting characters, never words or sentence punctuation."""
+        if not text:
+            return text
+        # ATX headings: leading #'s at the start of a line (with or w/o a space)
+        text = re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]*", "", text)
+        # setext heading underlines (=== / --- on their own line)
+        text = re.sub(r"(?m)^[ \t]{0,3}[=\-]{3,}[ \t]*$", "", text)
+        # emphasis / code markers and blockquote arrows
+        text = text.replace("`", "")
+        text = re.sub(r"\*{1,3}", "", text)
+        text = re.sub(r"(?m)^[ \t]{0,3}>[ \t]?", "", text)
+        text = re.sub(r"(?<![A-Za-z0-9])_(?![A-Za-z0-9])", "", text)  # _emphasis_, not in_words
+        return text
+
     @staticmethod
     def chunk_text(text: str, max_chars: int = 500):
         """Split text into synthesis-sized chunks at sentence boundaries."""
@@ -63,6 +96,7 @@ class Engine:
 
     def synth_chunk(self, text: str, voice: str, speed: float = 1.0) -> np.ndarray:
         """Synthesize one chunk, returning a float32 mono waveform at 24kHz."""
+        text = self.clean_speech_text(text)
         pipe = self.pipeline(voicecat.lang_code(voice))
         audio_parts = []
         for _, _, audio in pipe(text, voice=voice, speed=speed):
@@ -82,7 +116,10 @@ class Engine:
         out = self.sample_path(voice)
         if os.path.exists(out) and os.path.getsize(out) > 0:
             return out
-        wav = self.synth_chunk(voicecat.SAMPLE_TEXT, voice, speed=1.0)
+        import gpu
+        with gpu.LOCK:
+            gpu.release_ollama()        # reclaim VRAM from Smart cast before TTS
+            wav = self.synth_chunk(voicecat.SAMPLE_TEXT, voice, speed=1.0)
         tmp_wav = out.replace(".mp3", ".wav")
         sf.write(tmp_wav, wav, SAMPLE_RATE)
         import subprocess
