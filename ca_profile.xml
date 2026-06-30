@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommunityApplications>
+  <!-- Required: describes this repository in the Community Apps portal. Markdown supported. -->
+  <Profile>
+# Vellichor
+
+Self-hosted apps by **woodscode**.
+
+**Vellichor** turns your written stories and ebooks into narrated audiobooks using
+the [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) TTS model. Features
+multi-voice character casting (rule-based or AI Smart cast via Ollama), background
+ambience mixing, chaptered **M4B** + per-chapter **MP3** output, and auto-export to
+an Audiobookshelf library. Optional NVIDIA GPU acceleration; falls back to CPU.
+
+For setup, configuration, and support, see the
+[project README](https://github.com/woodscode/vellichor-web) and
+[open an issue](https://github.com/woodscode/vellichor-web/issues).
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/woodscode/vellichor-web/main/unraid/icon.png</Icon>
+  <WebPage>https://github.com/woodscode/vellichor-web</WebPage>
+</CommunityApplications>
