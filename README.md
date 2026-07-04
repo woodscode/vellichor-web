@@ -1,17 +1,20 @@
 # Vellichor 🎧
 
 A self-hosted web app that turns your written stories (and ebooks) into
-narrated audiobooks using the **Kokoro-82M** TTS model. GPU-accelerated and
-light enough to run on a modest card (originally built on a GTX 1080); falls
-back to CPU. Built for writing & converting stories. Open source (MIT).
+narrated audiobooks. Fast by default with the **Kokoro-82M** TTS model, plus an
+optional **expressive engine (Chatterbox)** that adds emotional intensity and
+**voice cloning** — clone a voice from a short clip, or record your own right in
+the browser. GPU-accelerated and light enough to run on a modest card (originally
+built on a GTX 1080); falls back to CPU. Open source (MIT).
 
 ## Requirements
 - **Docker** and **Docker Compose**.
 - **(Optional) NVIDIA GPU** for acceleration — requires the NVIDIA Container
   Toolkit on the host (on Unraid, the **Nvidia Driver** plugin). With no GPU it
   runs on CPU instead — see the no-GPU note in *Getting started*.
-- ~6 GB of disk for the image plus models (Kokoro + the Ollama LLM, downloaded
-  on first use).
+- **Disk:** ~7 GB for the Docker image, plus models downloaded on first use —
+  Kokoro (small), the optional Ollama Smart-cast LLM (~2 GB), and the optional
+  Chatterbox expressive model (~1–2 GB). Budget ~12 GB total to use everything.
 
 ## Getting started
 ```bash
@@ -52,6 +55,14 @@ Store that password in your password manager.
   Story-friendly voices are starred (★). `af_heart` is the default.
 - **Live preview** — hear your chosen voice read the current text before
   committing to a full conversion.
+- **Choose your TTS engine** (dropdown, per conversion):
+  - **Kokoro** (default) — fast, lightweight, many preset voices.
+  - **Chatterbox (expressive)** — richer, more lifelike delivery with an
+    **Expressiveness** dial and **voice cloning**. Heavier (more VRAM, slower).
+- **🎙️ Record / clone a voice** (Chatterbox) — record your own voice in the
+  browser (read the on-screen script for ~15–20s) or upload a short clip, and
+  save it to a reusable **My Voices** library. Narrate in *your* voice. (The mic
+  needs a secure page — see *Expressive voices* below.)
 - Reading-speed slider, optional cover art, author label.
 - **Output loudness** control (Off / Standard / Loud / Extra loud) — applies
   EBU R128 loudness normalization so the finished book plays at a consistent,
@@ -102,6 +113,30 @@ Both models share the GPU; `OLLAMA_KEEP_ALIVE=2m` unloads the LLM from VRAM
 after use so Kokoro has room (on an 8 GB card they can't both stay resident).
 To try a more accurate (heavier) model, pull it and set `SMARTCAST_MODEL` in
 `.env` (e.g. `qwen2.5:7b`), then `up -d`.
+
+## Expressive voices (Chatterbox)
+Pick **Chatterbox (expressive)** from the *TTS engine* dropdown for more lifelike,
+emotional narration. Two extra controls appear:
+- **Expressiveness** — how animated the delivery is (0.5 is a good default).
+- **Voice source** — clone a voice instead of using a preset:
+  - **Preset** — clones the Kokoro voice picked on the left (zero setup).
+  - **Record a voice** — record yourself in the browser (read the on-screen script
+    for ~15–20s), review, then *Use for this book* or *Save* it to **My Voices**.
+  - **Upload a clip** — a clean 5–30s single-speaker clip works best.
+
+Saved voices form a **My Voices** library reusable across books, stored under
+`data/voices/`. Cloning runs **locally on your GPU** — clips never leave the box.
+
+Notes:
+- **The microphone only works on a secure page** (`https://` or `localhost`). Over
+  `http://<ip>:7777` the browser blocks the mic — put Vellichor behind an HTTPS
+  reverse proxy (or use localhost). Uploading a clip works either way.
+- Chatterbox is **heavier** than Kokoro (more VRAM, slower). It loads/unloads
+  around Kokoro and the Ollama model to share an 8 GB card; its model (~1–2 GB)
+  downloads on first use into `data/hf-cache`.
+- Multi-voice cast is **Kokoro-only** for now.
+- Chatterbox is MIT-licensed; outputs carry an inaudible Resemble "Perth"
+  watermark by design (harmless for personal use).
 
 ## Configuration (`.env`)
 - `VELLICHOR_PASSWORD` — login password (change anytime, then `up -d`).
