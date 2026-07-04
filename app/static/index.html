@@ -80,6 +80,10 @@ Write or paste your story here. Use # Heading lines to split it into chapters.">
     <aside class="panel settings">
       <h2>Settings</h2>
 
+      <label class="lbl">TTS engine</label>
+      <select id="engineSelect" class="field"></select>
+      <div id="engineBlurb" class="hint"></div>
+
       <label class="lbl">Selected voice</label>
       <div id="selectedVoice" class="selected-voice">—</div>
 
@@ -89,6 +93,15 @@ Write or paste your story here. Use # Heading lines to split it into chapters.">
       <label class="lbl">Output loudness · <span id="loudVal">Loud</span></label>
       <input type="range" id="loud" min="0" max="3" step="1" value="2" />
       <div class="hint">Boosts the final volume — helps on quiet speakers (e.g. a Toniebox).</div>
+
+      <div id="expressiveControls" hidden>
+        <label class="lbl">Expressiveness · <span id="exagVal">0.50</span></label>
+        <input type="range" id="exag" min="0" max="1" step="0.05" value="0.5" />
+        <label class="lbl">Voice reference (optional — clone a voice)</label>
+        <input type="file" id="referenceInput" class="field" accept=".wav,.mp3,.m4a,.ogg,.flac" />
+        <div class="hint">Uses the voice picked on the left as a starting point, or upload a
+          5–30s clip to clone. Multi-voice cast is Kokoro-only.</div>
+      </div>
 
       <label class="lbl">Author / narrator label</label>
       <input id="author" class="field" placeholder="Vellichor" />

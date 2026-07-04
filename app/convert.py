@@ -15,6 +15,8 @@ import cast as castmod
 import ambience as amb
 import voices as voicecat
 import directives
+import engines
+import chatterbox_engine as cbx
 import gpu
 
 class Cancelled(Exception):
@@ -148,11 +150,27 @@ def _loudnorm_af(job):
     return f"loudnorm=I={lufs:.1f}:TP=-1.5:LRA=11"
 
 
+def _render_kokoro_reference(voice: str, workdir: str) -> str:
+    """Render a short Kokoro sample of `voice` for use as a Chatterbox cloning
+    reference (a "bundled voice pack"). Cached across jobs under /data/refs."""
+    refs = os.path.join("/data", "refs")
+    os.makedirs(refs, exist_ok=True)
+    out = os.path.join(refs, f"{voice}.wav")
+    if os.path.exists(out) and os.path.getsize(out) > 0:
+        return out
+    wav = ENGINE.synth_chunk(voicecat.SAMPLE_TEXT, voice, 1.0)
+    sf.write(out, wav, SAMPLE_RATE)
+    return out
+
+
 def run(job: dict, progress) -> dict:
     workdir = job["workdir"]
     os.makedirs(workdir, exist_ok=True)
     voice, speed = job["voice"], float(job.get("speed", 1.0))
-    multivoice = bool(job.get("multivoice"))
+    engine_id = engines.resolve(job.get("engine") or engines.DEFAULT)
+    exaggeration = float(job.get("exaggeration", 0.5))
+    # Expressive engines render a single cloned voice; multi-voice is Kokoro-only.
+    multivoice = bool(job.get("multivoice")) and engine_id == "kokoro"
     cast_map = job.get("cast") or {}
 
     # ---- 1. Extract chapters --------------------------------------------
@@ -206,37 +224,51 @@ def run(job: dict, progress) -> dict:
     chapter_wavs = []
     done = 0
     t0 = time.time()
+    synth = cbx.ENGINE if engine_id == "chatterbox" else ENGINE
+    reference_path = None
     with gpu.LOCK:
         gpu.release_ollama()
-        for idx, ch in enumerate(chapters):
-            # A short settle before each new chapter/title so it doesn't run
-            # straight into the tail of the previous one.
-            parts = [GAP] if idx > 0 else []
-            prev_voice = None
-            for op in ch["ops"]:
-                if job.get("cancel"):
-                    raise Cancelled()
-                if op["kind"] == "pause":
-                    parts.append(_silence(op["seconds"]))
-                    prev_voice = None        # a pause already separates speakers
-                    continue
-                # Only gap between *different* speakers — a character with several
-                # lines in a row now flows as one continuous turn.
-                if multivoice and prev_voice is not None and op["voice"] != prev_voice:
-                    parts.append(SEG_GAP)
-                parts.append(ENGINE.synth_chunk(op["text"], op["voice"], op["speed"]))
-                prev_voice = op["voice"]
-                done += 1
-                elapsed = time.time() - t0
-                rate = done / elapsed if elapsed > 0 else 0
-                eta = int((total_chunks - done) / rate) if rate > 0 else None
-                pct = 4 + int(done / total_chunks * 76)
-                progress(stage=f"Narrating: {ch['title']}", percent=pct,
-                         chapters_done=idx, chunks_done=done, eta=eta)
-            audio = np.concatenate(parts) if parts else np.zeros(0, dtype="float32")
-            wav_path = os.path.join(workdir, f"ch{idx:03d}.wav")
-            sf.write(wav_path, audio, SAMPLE_RATE)
-            chapter_wavs.append({"path": wav_path, "title": ch["title"]})
+        if engine_id == "chatterbox":
+            # Resolve the cloning reference (uploaded clip, or a Kokoro-rendered
+            # sample for a bundled voice) BEFORE freeing Kokoro's VRAM.
+            reference_path = (job.get("reference_path")
+                              or _render_kokoro_reference(voice, workdir))
+            ENGINE.unload()          # hand the GPU to Chatterbox (can't coexist on 8 GB)
+        try:
+            for idx, ch in enumerate(chapters):
+                # A short settle before each new chapter/title so it doesn't run
+                # straight into the tail of the previous one.
+                parts = [GAP] if idx > 0 else []
+                prev_voice = None
+                for op in ch["ops"]:
+                    if job.get("cancel"):
+                        raise Cancelled()
+                    if op["kind"] == "pause":
+                        parts.append(_silence(op["seconds"]))
+                        prev_voice = None    # a pause already separates speakers
+                        continue
+                    # Only gap between *different* speakers — a character with
+                    # several lines in a row flows as one continuous turn.
+                    if multivoice and prev_voice is not None and op["voice"] != prev_voice:
+                        parts.append(SEG_GAP)
+                    parts.append(synth.synth_chunk(
+                        op["text"], op["voice"], op["speed"],
+                        exaggeration=exaggeration, reference_path=reference_path))
+                    prev_voice = op["voice"]
+                    done += 1
+                    elapsed = time.time() - t0
+                    rate = done / elapsed if elapsed > 0 else 0
+                    eta = int((total_chunks - done) / rate) if rate > 0 else None
+                    pct = 4 + int(done / total_chunks * 76)
+                    progress(stage=f"Narrating: {ch['title']}", percent=pct,
+                             chapters_done=idx, chunks_done=done, eta=eta)
+                audio = np.concatenate(parts) if parts else np.zeros(0, dtype="float32")
+                wav_path = os.path.join(workdir, f"ch{idx:03d}.wav")
+                sf.write(wav_path, audio, SAMPLE_RATE)
+                chapter_wavs.append({"path": wav_path, "title": ch["title"]})
+        finally:
+            if engine_id == "chatterbox":
+                synth.unload()       # release VRAM back to Kokoro / Ollama
 
     # ---- 3b. Mix background ambience ------------------------------------
     bed = job.get("ambience_path") or amb.path_for(job.get("ambience_id"))

@@ -14,8 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# CUDA 12.4 PyTorch — supports the GTX 1080 (Pascal, sm_61).
-RUN pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+# CUDA 12.4 PyTorch — still supports the GTX 1080 (Pascal, sm_61). Pinned to
+# 2.6.0 to satisfy chatterbox-tts's exact torch pin; Pascal was only dropped from
+# the CUDA 12.8 builds of torch 2.8+, so 2.6.0+cu124 keeps the 1080 working.
+RUN pip install --retries 10 --timeout 300 torch==2.6.0 torchaudio==2.6.0 \
+    --index-url https://download.pytorch.org/whl/cu124
 
 COPY requirements.txt .
 RUN pip install -r requirements.txt

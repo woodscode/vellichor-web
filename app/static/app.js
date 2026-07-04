@@ -131,6 +131,38 @@ const LOUD_LABELS = ['Off', 'Standard', 'Loud', 'Extra loud'];
 const LOUD_LUFS = [0, -18, -16, -14];
 $('#loud').addEventListener('input', (e) => $('#loudVal').textContent = LOUD_LABELS[+e.target.value]);
 
+// ---------- TTS engine ----------
+let ENGINES = [];
+async function loadEngines() {
+  try {
+    const r = await fetch('/api/engines');
+    const d = await r.json();
+    ENGINES = d.engines || [];
+    const sel = $('#engineSelect');
+    sel.innerHTML = '';
+    for (const e of ENGINES) {
+      const o = document.createElement('option');
+      o.value = e.id;
+      o.textContent = e.available ? e.label : `${e.label} — unavailable`;
+      o.disabled = !e.available;
+      if (e.id === d.default) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.addEventListener('change', updateEngineUI);
+    updateEngineUI();
+  } catch (e) {}
+}
+function currentEngine() {
+  return ENGINES.find(e => e.id === $('#engineSelect').value) || ENGINES[0] || null;
+}
+function updateEngineUI() {
+  const e = currentEngine();
+  $('#engineBlurb').textContent = e ? (e.blurb || '') : '';
+  const expressive = !!e && (e.controls || []).includes('exaggeration');
+  $('#expressiveControls').hidden = !expressive;
+}
+$('#exag').addEventListener('input', (e) => $('#exagVal').textContent = (+e.target.value).toFixed(2));
+
 // ---------- upload ----------
 const dz = $('#dropzone'), fileInput = $('#fileInput');
 dz.addEventListener('click', () => fileInput.click());
@@ -172,7 +204,10 @@ $('#convertBtn').addEventListener('click', async () => {
   const writing = $('.tab[data-tab="write"]').classList.contains('active');
   const fd = new FormData();
   fd.append('voice', selected);
+  fd.append('engine', $('#engineSelect').value || 'kokoro');
   fd.append('speed', $('#speed').value);
+  fd.append('exaggeration', $('#exag').value);
+  if ($('#referenceInput').files[0]) fd.append('reference_file', $('#referenceInput').files[0]);
   fd.append('loudness', LOUD_LUFS[+$('#loud').value]);
   fd.append('author', $('#author').value || 'Vellichor');
   fd.append('export_abs', $('#exportAbs').checked);
@@ -456,6 +491,7 @@ $('#logoutBtn').addEventListener('click', async () => {
 
 // ---------- boot ----------
 loadVoices();
+loadEngines();
 loadAmbience();
 checkSmartcast();
 refreshJobs();

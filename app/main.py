@@ -16,6 +16,7 @@ import voices as voicecat
 import cast as castmod
 import ambience as amb
 import smartcast
+import engines
 import gpu
 from tts import ENGINE
 from jobs import MANAGER
@@ -87,6 +88,12 @@ def logout():
 def list_voices():
     return {"voices": voicecat.VOICES, "default": voicecat.DEFAULT_VOICE,
             "device": ENGINE.device}
+
+
+@app.get("/api/engines")
+def list_engines():
+    """TTS backends the UI can offer (Kokoro always; Chatterbox if installed)."""
+    return engines.list_ui()
 
 
 @app.get("/api/voice-sample/{voice}")
@@ -228,7 +235,9 @@ def _cleanup(path):
 async def convert_endpoint(
     request: Request,
     voice: str = Form(...),
+    engine: str = Form("kokoro"),
     speed: float = Form(1.0),
+    exaggeration: float = Form(0.5),
     loudness: float = Form(-16.0),
     title: str = Form(""),
     author: str = Form("Vellichor"),
@@ -243,6 +252,7 @@ async def convert_endpoint(
     file: UploadFile = File(None),
     cover: UploadFile = File(None),
     ambience_file: UploadFile = File(None),
+    reference_file: UploadFile = File(None),
 ):
     if not voicecat.is_valid(voice):
         raise HTTPException(400, "Unknown voice")
@@ -291,6 +301,15 @@ async def convert_endpoint(
             with open(ambience_path, "wb") as f:
                 shutil.copyfileobj(ambience_file.file, f)
 
+    # Optional custom reference clip for a cloning engine (e.g. Chatterbox)
+    reference_path = None
+    if reference_file is not None and reference_file.filename:
+        rext = os.path.splitext(reference_file.filename)[1].lower()
+        if rext in (".wav", ".mp3", ".m4a", ".ogg", ".flac"):
+            reference_path = os.path.join(workdir, "reference" + rext)
+            with open(reference_path, "wb") as f:
+                shutil.copyfileobj(reference_file.file, f)
+
     spec = {
         "id": jid,
         "source": source,
@@ -298,7 +317,10 @@ async def convert_endpoint(
         "title": title or "Story",
         "author": author or "Vellichor",
         "voice": voice,
+        "engine": engines.resolve(engine),
         "speed": max(0.5, min(2.0, speed)),
+        "exaggeration": max(0.0, min(1.0, exaggeration)),
+        "reference_path": reference_path,
         "loudness": max(-24.0, min(0.0, loudness)),   # LUFS target; 0 = off
         "formats": [f for f in formats.split(",") if f in ("m4b", "mp3")] or ["m4b"],
         "export_abs": bool(export_abs),

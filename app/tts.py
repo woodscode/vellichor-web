@@ -94,8 +94,10 @@ class Engine:
             chunks.append(cur)
         return chunks
 
-    def synth_chunk(self, text: str, voice: str, speed: float = 1.0) -> np.ndarray:
-        """Synthesize one chunk, returning a float32 mono waveform at 24kHz."""
+    def synth_chunk(self, text: str, voice: str, speed: float = 1.0, **_) -> np.ndarray:
+        """Synthesize one chunk, returning a float32 mono waveform at 24kHz.
+        Extra keyword args (exaggeration, reference_path) are accepted for a
+        uniform cross-engine interface and ignored by Kokoro."""
         text = self.clean_speech_text(text)
         pipe = self.pipeline(voicecat.lang_code(voice))
         audio_parts = []

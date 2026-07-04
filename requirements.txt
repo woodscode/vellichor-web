@@ -3,9 +3,13 @@ uvicorn[standard]==0.34.0
 python-multipart==0.0.20
 itsdangerous==2.2.0
 soundfile==0.13.1
-numpy
+numpy>=1.24.0,<2.0.0
 kokoro>=0.9.4
 misaki[en]>=0.9.4
+# Expressive TTS engine (optional at runtime; heavy — pulls transformers/diffusers).
+# Exact-pins torch==2.6.0 (installed in the Dockerfile) and needs `git` at build
+# time for its Perth watermark dep (already installed in the image).
+chatterbox-tts==0.1.7
 ebooklib==0.18
 beautifulsoup4==4.12.3
 lxml==5.3.0
