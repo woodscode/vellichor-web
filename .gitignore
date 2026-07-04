@@ -16,3 +16,6 @@ venv/
 .DS_Store
 Thumbs.db
 *.swp
+
+# Local dev notes & AI session logs — personal, never publish to GitHub
+.notes/
