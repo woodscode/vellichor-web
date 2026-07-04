@@ -291,3 +291,21 @@ select.field { appearance: none; background-image:
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 20px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ---- expressive engine: My Voices + recorder ---- */
+.myvoices-list { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; }
+.ref-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
+.ref-row.sel { border-color: var(--accent); background: var(--log-bg); }
+.ref-row .ref-name { flex: 1; }
+.ref-row .vc-play { flex: 0 0 auto; }
+.ref-del { background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 2px 4px; }
+.ref-del:hover { color: var(--bad); }
+.rec-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; flex-wrap: wrap; }
+.rec-controls { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.rec-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.rec-actions .field { flex: 1; min-width: 120px; }
+.rec-script { font-style: italic; color: var(--muted); padding: 8px 10px; margin: 6px 0;
+  border-left: 3px solid var(--accent); background: var(--log-bg); border-radius: 6px; }
+#recPlayback { width: 100%; margin: 6px 0; }

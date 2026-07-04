@@ -163,6 +163,138 @@ function updateEngineUI() {
 }
 $('#exag').addEventListener('input', (e) => $('#exagVal').textContent = (+e.target.value).toFixed(2));
 
+// ---------- reference voices ("My Voices") + in-app recorder ----------
+let MY_VOICES = [];
+// how to source the clone reference: {type:'preset'} | {type:'myvoice',id} | {type:'oneoff',file,label}
+let selectedRef = { type: 'preset' };
+let recordedBlob = null, mediaRec = null, recChunks = [], recTimerId = null, recSeconds = 0;
+
+const REC_SCRIPT = "Once upon a time, in a cosy little house at the edge of a quiet wood, " +
+  "there lived a curious child who loved stories more than anything. Every night, as the " +
+  "stars blinked awake, a warm and gentle voice would read aloud, carrying them off to " +
+  "lands of dragons, kind giants, and sleepy, moonlit seas.";
+
+async function loadMyVoices() {
+  try { MY_VOICES = (await (await fetch('/api/myvoices')).json()).voices || []; }
+  catch (e) { MY_VOICES = []; }
+  renderMyVoices();
+}
+
+function renderMyVoices() {
+  const list = $('#myVoicesList'); if (!list) return;
+  list.innerHTML = '';
+  const row = (checked, label) => {
+    const el = document.createElement('label');
+    el.className = 'ref-row' + (checked ? ' sel' : '');
+    el.innerHTML = `<input type="radio" name="refsrc" ${checked ? 'checked' : ''}/><span class="ref-name">${label}</span>`;
+    return el;
+  };
+  const preset = row(selectedRef.type === 'preset', '🎛️ Preset voice (from the list on the left)');
+  preset.querySelector('input').addEventListener('change', () => {
+    selectedRef = { type: 'preset' }; $('#refChosen').textContent = ''; renderMyVoices();
+  });
+  list.appendChild(preset);
+  for (const v of MY_VOICES) {
+    const r = row(selectedRef.type === 'myvoice' && selectedRef.id === v.id, '🗣️ ' + v.name);
+    const play = document.createElement('button');
+    play.type = 'button'; play.className = 'vc-play'; play.textContent = '▶'; play.title = 'Preview';
+    play.addEventListener('click', (e) => { e.preventDefault(); stopAllAudio(); sampleAudio.src = `/api/myvoices/${v.id}/sample`; sampleAudio.play().catch(() => toast('Could not play preview', 'bad')); });
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'ref-del'; del.textContent = '✕'; del.title = 'Delete';
+    del.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!confirm(`Delete voice "${v.name}"?`)) return;
+      await fetch('/api/myvoices/' + v.id, { method: 'DELETE' });
+      if (selectedRef.type === 'myvoice' && selectedRef.id === v.id) selectedRef = { type: 'preset' };
+      loadMyVoices();
+    });
+    r.querySelector('input').addEventListener('change', () => {
+      selectedRef = { type: 'myvoice', id: v.id }; $('#refChosen').textContent = ''; renderMyVoices();
+    });
+    r.appendChild(play); r.appendChild(del);
+    list.appendChild(r);
+  }
+}
+
+function setOneOff(file, label) {
+  selectedRef = { type: 'oneoff', file, label };
+  $('#refChosen').textContent = '✓ ' + label;
+  renderMyVoices();
+}
+function blobExt(b) { return (b.type || '').includes('ogg') ? 'ogg' : 'webm'; }
+
+$('#referenceInput').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if (f) setOneOff(f, f.name + ' (this book only)');
+});
+
+// ---- recorder ----
+$('#recScript').textContent = REC_SCRIPT;
+$('#recToggle').addEventListener('click', () => { const p = $('#recPanel'); p.hidden = !p.hidden; });
+$('#recStart').addEventListener('click', startRecording);
+$('#recStop').addEventListener('click', stopRecording);
+$('#recUse').addEventListener('click', () => {
+  if (!recordedBlob) return;
+  const file = new File([recordedBlob], 'recording.' + blobExt(recordedBlob), { type: recordedBlob.type });
+  setOneOff(file, '🎙️ recording (this book only)');
+  toast('Recording set for this book', 'good');
+});
+$('#recSave').addEventListener('click', saveRecording);
+
+async function startRecording() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) {
+    $('#recMsg').textContent = '🔒 Recording needs a secure connection — open Vellichor via your https:// address.';
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recChunks = [];
+    mediaRec = new MediaRecorder(stream);
+    mediaRec.ondataavailable = (e) => { if (e.data.size) recChunks.push(e.data); };
+    mediaRec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      recordedBlob = new Blob(recChunks, { type: mediaRec.mimeType || 'audio/webm' });
+      const pb = $('#recPlayback'); pb.src = URL.createObjectURL(recordedBlob); pb.hidden = false;
+      $('#recUse').disabled = false; $('#recSave').disabled = false;
+    };
+    mediaRec.start();
+    recSeconds = 0; $('#recTimer').textContent = '0:00';
+    recTimerId = setInterval(() => {
+      recSeconds++;
+      $('#recTimer').textContent = Math.floor(recSeconds / 60) + ':' + String(recSeconds % 60).padStart(2, '0');
+      if (recSeconds >= 60) stopRecording();   // safety cap
+    }, 1000);
+    $('#recStart').disabled = true; $('#recStop').disabled = false; $('#recMsg').textContent = 'Recording…';
+  } catch (err) {
+    $('#recMsg').textContent = 'Mic blocked or unavailable: ' + (err.message || err.name || '');
+  }
+}
+function stopRecording() {
+  if (mediaRec && mediaRec.state !== 'inactive') mediaRec.stop();
+  if (recTimerId) { clearInterval(recTimerId); recTimerId = null; }
+  $('#recStart').disabled = false; $('#recStop').disabled = true;
+  $('#recMsg').textContent = 'Recorded ' + $('#recTimer').textContent + ' — review, then Use or Save.';
+}
+async function saveRecording() {
+  if (!recordedBlob) return;
+  const name = ($('#recName').value || '').trim();
+  if (!name) { toast('Give the voice a name first', 'bad'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('audio', recordedBlob, 'recording.' + blobExt(recordedBlob));
+  const btn = $('#recSave'); btn.disabled = true; btn.textContent = '◌ Saving…';
+  try {
+    const r = await fetch('/api/myvoices', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error(((await r.json().catch(() => ({}))).detail) || 'save failed');
+    const v = await r.json();
+    await loadMyVoices();
+    selectedRef = { type: 'myvoice', id: v.id }; $('#refChosen').textContent = ''; renderMyVoices();
+    $('#recPanel').hidden = true; $('#recName').value = '';
+    toast('Voice saved ✨', 'good');
+  } catch (e) { toast('Could not save voice: ' + e.message, 'bad'); }
+  finally { btn.disabled = false; btn.textContent = 'Save voice'; }
+}
+
 // ---------- upload ----------
 const dz = $('#dropzone'), fileInput = $('#fileInput');
 dz.addEventListener('click', () => fileInput.click());
@@ -204,10 +336,18 @@ $('#convertBtn').addEventListener('click', async () => {
   const writing = $('.tab[data-tab="write"]').classList.contains('active');
   const fd = new FormData();
   fd.append('voice', selected);
-  fd.append('engine', $('#engineSelect').value || 'kokoro');
+  const eng = $('#engineSelect').value || 'kokoro';
+  fd.append('engine', eng);
   fd.append('speed', $('#speed').value);
   fd.append('exaggeration', $('#exag').value);
-  if ($('#referenceInput').files[0]) fd.append('reference_file', $('#referenceInput').files[0]);
+  if (eng !== 'kokoro') {
+    if (selectedRef.type === 'oneoff' && selectedRef.file) {
+      fd.append('reference_file', selectedRef.file, selectedRef.file.name || 'reference.webm');
+    } else if (selectedRef.type === 'myvoice') {
+      fd.append('reference_voice', selectedRef.id);
+    }
+    // 'preset' → send nothing; backend clones a Kokoro render of the picked voice
+  }
   fd.append('loudness', LOUD_LUFS[+$('#loud').value]);
   fd.append('author', $('#author').value || 'Vellichor');
   fd.append('export_abs', $('#exportAbs').checked);
@@ -492,6 +632,7 @@ $('#logoutBtn').addEventListener('click', async () => {
 // ---------- boot ----------
 loadVoices();
 loadEngines();
+loadMyVoices();
 loadAmbience();
 checkSmartcast();
 refreshJobs();

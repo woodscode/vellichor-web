@@ -17,6 +17,7 @@ import voices as voicecat
 import directives
 import engines
 import chatterbox_engine as cbx
+import myvoices
 import gpu
 
 class Cancelled(Exception):
@@ -163,6 +164,28 @@ def _render_kokoro_reference(voice: str, workdir: str) -> str:
     return out
 
 
+def _prepare_reference(src: str, workdir: str) -> str:
+    """Normalize an arbitrary reference clip (upload or browser recording, any
+    ffmpeg-readable format incl. .webm) to a clean mono 24 kHz wav for cloning."""
+    out = os.path.join(workdir, "ref_prepared.wav")
+    _ffmpeg(["-i", src, "-ac", "1", "-ar", str(SAMPLE_RATE),
+             "-af", "highpass=f=60,loudnorm=I=-20:TP=-2", out])
+    return out
+
+
+def _resolve_reference(job: dict, voice: str, workdir: str) -> str:
+    """Pick the Chatterbox cloning reference, in priority order:
+    a one-off uploaded/recorded clip → a saved 'My Voice' → else a Kokoro-rendered
+    sample of the selected preset voice."""
+    one_off = job.get("reference_path")
+    if one_off and os.path.exists(one_off):
+        return _prepare_reference(one_off, workdir)
+    saved = myvoices.path_for(job.get("reference_voice"))
+    if saved:                       # already normalized at save time
+        return saved
+    return _render_kokoro_reference(voice, workdir)
+
+
 def run(job: dict, progress) -> dict:
     workdir = job["workdir"]
     os.makedirs(workdir, exist_ok=True)
@@ -229,10 +252,9 @@ def run(job: dict, progress) -> dict:
     with gpu.LOCK:
         gpu.release_ollama()
         if engine_id == "chatterbox":
-            # Resolve the cloning reference (uploaded clip, or a Kokoro-rendered
-            # sample for a bundled voice) BEFORE freeing Kokoro's VRAM.
-            reference_path = (job.get("reference_path")
-                              or _render_kokoro_reference(voice, workdir))
+            # Resolve the cloning reference (one-off clip / saved voice / bundled
+            # Kokoro render) BEFORE freeing Kokoro's VRAM.
+            reference_path = _resolve_reference(job, voice, workdir)
             ENGINE.unload()          # hand the GPU to Chatterbox (can't coexist on 8 GB)
         try:
             for idx, ch in enumerate(chapters):

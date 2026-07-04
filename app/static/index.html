@@ -97,10 +97,36 @@ Write or paste your story here. Use # Heading lines to split it into chapters.">
       <div id="expressiveControls" hidden>
         <label class="lbl">Expressiveness · <span id="exagVal">0.50</span></label>
         <input type="range" id="exag" min="0" max="1" step="0.05" value="0.5" />
-        <label class="lbl">Voice reference (optional — clone a voice)</label>
-        <input type="file" id="referenceInput" class="field" accept=".wav,.mp3,.m4a,.ogg,.flac" />
-        <div class="hint">Uses the voice picked on the left as a starting point, or upload a
-          5–30s clip to clone. Multi-voice cast is Kokoro-only.</div>
+
+        <label class="lbl">Voice source</label>
+        <div id="myVoicesList" class="myvoices-list"></div>
+
+        <div class="rec-row">
+          <button id="recToggle" type="button" class="ghost">🎙️ Record a voice</button>
+          <label class="upload-mini">＋ Upload a clip
+            <input type="file" id="referenceInput" accept=".wav,.mp3,.m4a,.ogg,.flac,.webm" hidden /></label>
+        </div>
+        <div id="refChosen" class="muted small"></div>
+
+        <div id="recPanel" hidden>
+          <div class="hint">Read this aloud clearly for ~15–20s in a quiet room, then Stop:</div>
+          <p id="recScript" class="rec-script"></p>
+          <div class="rec-controls">
+            <button id="recStart" type="button" class="primary">● Record</button>
+            <button id="recStop" type="button" class="ghost" disabled>■ Stop</button>
+            <span id="recTimer" class="muted small">0:00</span>
+          </div>
+          <audio id="recPlayback" controls hidden></audio>
+          <div class="rec-actions">
+            <button id="recUse" type="button" class="ghost" disabled>Use for this book</button>
+            <input id="recName" class="field" placeholder="Name (e.g. Dad)" />
+            <button id="recSave" type="button" class="primary" disabled>Save voice</button>
+          </div>
+          <div id="recMsg" class="muted small"></div>
+        </div>
+
+        <div class="hint">Pick a saved voice, record or upload a 5–30s clip to clone, or leave
+          it on <em>Preset</em> to use the voice chosen on the left. Multi-voice cast is Kokoro-only.</div>
       </div>
 
       <label class="lbl">Author / narrator label</label>

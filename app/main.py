@@ -17,6 +17,7 @@ import cast as castmod
 import ambience as amb
 import smartcast
 import engines
+import myvoices
 import gpu
 from tts import ENGINE
 from jobs import MANAGER
@@ -94,6 +95,46 @@ def list_voices():
 def list_engines():
     """TTS backends the UI can offer (Kokoro always; Chatterbox if installed)."""
     return engines.list_ui()
+
+
+# ---- saved "My Voices" (cloning references) -----------------------------
+@app.get("/api/myvoices")
+def myvoices_list():
+    return {"voices": myvoices.list_all()}
+
+
+@app.post("/api/myvoices")
+async def myvoices_add(name: str = Form(...), audio: UploadFile = File(...)):
+    """Save a recorded/uploaded clip as a reusable cloning voice."""
+    if not audio or not audio.filename:
+        raise HTTPException(400, "No audio provided")
+    tmp = os.path.join(UPLOAD_DIR, f"rec_{uuid.uuid4().hex}")
+    with open(tmp, "wb") as f:
+        shutil.copyfileobj(audio.file, f)
+    try:
+        return await run_in_threadpool(myvoices.save, name, tmp)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"Could not save voice: {e}")
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
+@app.delete("/api/myvoices/{vid}")
+def myvoices_delete(vid: str):
+    if not myvoices.delete(vid):
+        raise HTTPException(404, "No such voice")
+    return {"ok": True}
+
+
+@app.get("/api/myvoices/{vid}/sample")
+def myvoices_sample(vid: str):
+    path = myvoices.path_for(vid)
+    if not path:
+        raise HTTPException(404, "No such voice")
+    return FileResponse(path, media_type="audio/wav")
 
 
 @app.get("/api/voice-sample/{voice}")
@@ -236,6 +277,7 @@ async def convert_endpoint(
     request: Request,
     voice: str = Form(...),
     engine: str = Form("kokoro"),
+    reference_voice: str = Form(""),
     speed: float = Form(1.0),
     exaggeration: float = Form(0.5),
     loudness: float = Form(-16.0),
@@ -305,7 +347,7 @@ async def convert_endpoint(
     reference_path = None
     if reference_file is not None and reference_file.filename:
         rext = os.path.splitext(reference_file.filename)[1].lower()
-        if rext in (".wav", ".mp3", ".m4a", ".ogg", ".flac"):
+        if rext in (".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm"):
             reference_path = os.path.join(workdir, "reference" + rext)
             with open(reference_path, "wb") as f:
                 shutil.copyfileobj(reference_file.file, f)
@@ -321,6 +363,7 @@ async def convert_endpoint(
         "speed": max(0.5, min(2.0, speed)),
         "exaggeration": max(0.0, min(1.0, exaggeration)),
         "reference_path": reference_path,
+        "reference_voice": reference_voice or "",
         "loudness": max(-24.0, min(0.0, loudness)),   # LUFS target; 0 = off
         "formats": [f for f in formats.split(",") if f in ("m4b", "mp3")] or ["m4b"],
         "export_abs": bool(export_abs),
