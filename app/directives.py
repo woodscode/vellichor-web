@@ -17,7 +17,8 @@ for a [Name] speaker tag.
 import re
 
 # Reserved directive keywords (kept in sync with cast.TAG's negative lookahead).
-KEYWORDS = "pause|beat|slow|slower|fast|faster|normal"
+KEYWORDS = ("pause|beat|slow|slower|fast|faster|normal|"
+            "whisper|calm|sad|neutral|happy|tense|excited|angry")
 
 _DIRECTIVE = re.compile(r"\[\s*(" + KEYWORDS + r")\b\s*:?\s*([^\]\n]*)\]", re.I)
 
@@ -26,6 +27,15 @@ _SPEED_MULT = {
     "fast": 1.18, "faster": 1.35,
     "normal": 1.0,
 }
+
+# Emotion tags map to an "expressiveness" (0–1) value. Engines that support an
+# intensity dial (Chatterbox) use it per passage; Kokoro ignores it (no emotion).
+# With Chatterbox this is really *intensity*, not distinct emotions.
+_EMOTION_EXAG = {
+    "whisper": 0.25, "calm": 0.35, "sad": 0.40, "neutral": 0.50,
+    "happy": 0.65, "tense": 0.72, "excited": 0.82, "angry": 0.88,
+}
+
 DEFAULT_PAUSE = 0.8
 BEAT_PAUSE = 0.4
 MAX_PAUSE = 30.0
@@ -50,9 +60,10 @@ def has_directives(text: str) -> bool:
 
 def tokenize(text: str):
     """Split text into an ordered list of tokens, consuming the markup:
-      ("text",  str)   — a run of prose to synthesize
-      ("pause", secs)  — insert silence
-      ("speed", mult)  — set the speed multiplier for the following prose
+      ("text",    str)   — a run of prose to synthesize
+      ("pause",   secs)  — insert silence
+      ("speed",   mult)  — set the speed multiplier for the following prose
+      ("emotion", exag)  — set the expressiveness (0–1) for the following prose
     """
     text = text or ""
     out, pos = [], 0
@@ -64,6 +75,8 @@ def tokenize(text: str):
         if kw in ("pause", "beat"):
             default = BEAT_PAUSE if kw == "beat" else DEFAULT_PAUSE
             out.append(("pause", _pause_seconds(m.group(2), default)))
+        elif kw in _EMOTION_EXAG:
+            out.append(("emotion", _EMOTION_EXAG[kw]))
         else:
             out.append(("speed", _SPEED_MULT.get(kw, 1.0)))
         pos = m.end()

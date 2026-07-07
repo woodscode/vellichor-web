@@ -309,3 +309,13 @@ select.field { appearance: none; background-image:
 .rec-script { font-style: italic; color: var(--muted); padding: 8px 10px; margin: 6px 0;
   border-left: 3px solid var(--accent); background: var(--log-bg); border-radius: 6px; }
 #recPlayback { width: 100%; margin: 6px 0; }
+
+/* ---- pronunciation dictionary ---- */
+.pron-list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+.pron-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+  border: 1px solid var(--border); border-radius: var(--radius); }
+.pron-row .pron-from { font-weight: 600; }
+.pron-row .pron-arrow { color: var(--muted); }
+.pron-row .pron-to { flex: 1; color: var(--muted); }
+.pron-add { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.pron-add .field { flex: 1; min-width: 140px; }

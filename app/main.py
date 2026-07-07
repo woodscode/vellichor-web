@@ -18,6 +18,8 @@ import ambience as amb
 import smartcast
 import engines
 import myvoices
+import pronunciations as pron
+import convert
 import gpu
 from tts import ENGINE
 from jobs import MANAGER
@@ -137,6 +139,30 @@ def myvoices_sample(vid: str):
     return FileResponse(path, media_type="audio/wav")
 
 
+# ---- pronunciation dictionary -------------------------------------------
+@app.get("/api/pronunciations")
+def pron_list():
+    return {"rules": pron.list_all()}
+
+
+@app.post("/api/pronunciations")
+async def pron_add(request: Request):
+    body = await request.json()
+    try:
+        rules = pron.save(body.get("from", ""), body.get("to", ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"rules": rules}
+
+
+@app.delete("/api/pronunciations/{frm}")
+def pron_delete(frm: str):
+    from urllib.parse import unquote
+    if not pron.delete(unquote(frm)):
+        raise HTTPException(404, "No such rule")
+    return {"ok": True}
+
+
 @app.get("/api/voice-sample/{voice}")
 def voice_sample(voice: str):
     if not voicecat.is_valid(voice):
@@ -226,37 +252,44 @@ def ambience_sample(bed_id: str):
     return FileResponse(path, media_type="audio/wav")
 
 
-def _preview_blocking(voice, text, speed):
-    """Synthesize + encode a preview clip (blocking GPU/ffmpeg work)."""
-    import soundfile as sf
-    import subprocess
-    pid = uuid.uuid4().hex
-    wav = os.path.join(UPLOAD_DIR, f"prev_{pid}.wav")
-    mp3 = os.path.join(UPLOAD_DIR, f"prev_{pid}.mp3")
-    with gpu.LOCK:
-        gpu.release_ollama()        # reclaim VRAM from Smart cast before TTS
-        audio = ENGINE.synth_chunk(text, voice, speed)
-    sf.write(wav, audio, 24000)
-    subprocess.run(["ffmpeg", "-y", "-i", wav, "-c:a", "libmp3lame", "-q:a", "5", mp3],
-                   check=True, capture_output=True)
-    os.remove(wav)
-    return mp3
-
-
 @app.post("/api/preview")
-async def preview(request: Request):
-    """Synthesize a short live preview of arbitrary text in a chosen voice."""
-    body = await request.json()
-    voice = body.get("voice", voicecat.DEFAULT_VOICE)
-    text = (body.get("text") or "").strip()[:400]
-    speed = float(body.get("speed", 1.0))
+async def preview(
+    voice: str = Form(...),
+    engine: str = Form("kokoro"),
+    reference_voice: str = Form(""),
+    speed: float = Form(1.0),
+    exaggeration: float = Form(0.5),
+    loudness: float = Form(0.0),
+    text: str = Form(""),
+    reference_file: UploadFile = File(None),
+):
+    """Preview a short snippet with the *exact* engine/voice/loudness/reference
+    the user has selected — so a slow Chatterbox render isn't a surprise."""
     if not voicecat.is_valid(voice):
         raise HTTPException(400, "Unknown voice")
+    text = (text or "").strip()
     if not text:
         raise HTTPException(400, "Nothing to preview")
-    mp3 = await run_in_threadpool(_preview_blocking, voice, text, speed)
+    out_dir = os.path.join(UPLOAD_DIR, "prev_" + uuid.uuid4().hex)
+    os.makedirs(out_dir, exist_ok=True)
+    ref_path = None
+    if reference_file is not None and reference_file.filename:
+        rext = os.path.splitext(reference_file.filename)[1].lower()
+        if rext in (".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm"):
+            ref_path = os.path.join(out_dir, "reference" + rext)
+            with open(ref_path, "wb") as f:
+                shutil.copyfileobj(reference_file.file, f)
+    job_like = {
+        "engine": engine, "voice": voice, "speed": speed,
+        "exaggeration": exaggeration, "loudness": loudness,
+        "reference_path": ref_path, "reference_voice": reference_voice or "",
+    }
+    try:
+        mp3 = await run_in_threadpool(convert.render_preview, job_like, text, out_dir)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"Preview failed: {e}")
     return FileResponse(mp3, media_type="audio/mpeg",
-                        background=_cleanup(mp3))
+                        background=_cleanup_dir(out_dir))
 
 
 def _cleanup(path):
@@ -268,6 +301,15 @@ def _cleanup(path):
             os.remove(path)
         except OSError:
             pass
+    return BackgroundTask(lambda: threading.Thread(target=rm, daemon=True).start())
+
+
+def _cleanup_dir(path):
+    from starlette.background import BackgroundTask
+
+    def rm():
+        time.sleep(60)
+        shutil.rmtree(path, ignore_errors=True)
     return BackgroundTask(lambda: threading.Thread(target=rm, daemon=True).start())
 
 

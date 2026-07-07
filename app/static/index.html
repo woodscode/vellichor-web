@@ -44,7 +44,8 @@
 
 Write or paste your story here. Use # Heading lines to split it into chapters."></textarea>
         <div class="hint">Tip: lines starting with <code># </code> become chapter breaks.
-          Add <code>[pause 2s]</code> for a silence, or <code>[slow]</code>…<code>[normal]</code> to change the pace.</div>
+          Add <code>[pause 2s]</code> for a silence, <code>[slow]</code>…<code>[normal]</code> to change pace,
+          or <code>[calm]</code>/<code>[excited]</code>/<code>[sad]</code> to shift the mood (Chatterbox).</div>
       </div>
 
       <div class="tabpane" id="pane-upload">
@@ -189,6 +190,19 @@ Write or paste your story here. Use # Heading lines to split it into chapters.">
           Auto-duck music under narration</label>
         <audio id="ambAudio" hidden></audio>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ PRONUNCIATIONS ============ -->
+  <section class="panel jobs-panel">
+    <h2>🗣️ Pronunciations</h2>
+    <p class="muted small">Fix how names or odd words are read — whole-word, case-insensitive,
+      applied to every conversion &amp; preview.</p>
+    <div id="pronList" class="pron-list"></div>
+    <div class="pron-add">
+      <input id="pronFrom" class="field" placeholder="Word (e.g. Hermione)" />
+      <input id="pronTo" class="field" placeholder="Say it as (e.g. Her-my-oh-nee)" />
+      <button id="pronAdd" class="primary">Add</button>
     </div>
   </section>
 

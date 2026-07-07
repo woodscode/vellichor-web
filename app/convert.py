@@ -18,6 +18,7 @@ import directives
 import engines
 import chatterbox_engine as cbx
 import myvoices
+import pronunciations as pron
 import gpu
 
 class Cancelled(Exception):
@@ -102,26 +103,30 @@ def _spans_for(text, multivoice, narrator_voice, cast_map):
     return [(narrator_voice, text)]
 
 
-def _plan_chapter(ch, multivoice, narrator_voice, cast_map, base_speed):
+def _plan_chapter(ch, multivoice, narrator_voice, cast_map, base_speed, base_exag):
     """Return an ordered op list for one chapter. Each op is either
-    {"kind":"speak", voice, text, speed} or {"kind":"pause", seconds}.
+    {"kind":"speak", voice, text, speed, exaggeration} or {"kind":"pause", seconds}.
 
-    Inline [pause]/[slow] directives become pause/speed ops; a chapter title
-    (when present) is read first, followed by a beat before the body begins."""
+    Inline directives become ops: [pause]→silence, [slow]→speed, [calm]/[excited]→
+    expressiveness (Chatterbox). A chapter title (when present) is read first,
+    followed by a beat before the body begins."""
     ops = []
 
     spoken_title = ch.get("spoken_title")
     if spoken_title:
         for tchunk in ENGINE.chunk_text(spoken_title):
             ops.append({"kind": "speak", "voice": narrator_voice,
-                        "speed": _clamp_speed(base_speed), "text": tchunk})
+                        "speed": _clamp_speed(base_speed),
+                        "exaggeration": base_exag, "text": tchunk})
         if ops:
             ops.append({"kind": "pause", "seconds": TITLE_GAP_S})
 
-    mult = 1.0
+    mult, emo = 1.0, base_exag
     for kind, val in directives.tokenize(ch["text"]):
         if kind == "speed":
             mult = val
+        elif kind == "emotion":
+            emo = val
         elif kind == "pause":
             ops.append({"kind": "pause", "seconds": val})
         else:  # a run of prose
@@ -129,12 +134,13 @@ def _plan_chapter(ch, multivoice, narrator_voice, cast_map, base_speed):
                 for chunk in ENGINE.chunk_text(body):
                     ops.append({"kind": "speak", "voice": voice,
                                 "speed": _clamp_speed(base_speed * mult),
-                                "text": chunk})
+                                "exaggeration": emo, "text": chunk})
 
     if not any(o["kind"] == "speak" for o in ops):
         for chunk in ENGINE.chunk_text(directives.strip(ch["text"])):
             ops.append({"kind": "speak", "voice": narrator_voice,
-                        "speed": _clamp_speed(base_speed), "text": chunk})
+                        "speed": _clamp_speed(base_speed),
+                        "exaggeration": base_exag, "text": chunk})
     return ops
 
 
@@ -186,6 +192,41 @@ def _resolve_reference(job: dict, voice: str, workdir: str) -> str:
     return _render_kokoro_reference(voice, workdir)
 
 
+def render_preview(job_like: dict, text: str, out_dir: str) -> str:
+    """Synthesize a short snippet with the *exact* engine/voice/loudness/reference
+    settings, for the UI 'Preview' button. Returns an mp3 path. Serializes on the
+    GPU lock like a real job."""
+    os.makedirs(out_dir, exist_ok=True)
+    engine_id = engines.resolve(job_like.get("engine") or engines.DEFAULT)
+    speed = float(job_like.get("speed", 1.0))
+    exag = float(job_like.get("exaggeration", 0.5))
+    snippet = pron.apply(directives.strip(text or "")).strip()[:500] or "Hello there."
+    with gpu.LOCK:
+        gpu.release_ollama()
+        if engine_id == "chatterbox":
+            ref = _resolve_reference(job_like, job_like.get("voice"), out_dir)
+            ENGINE.unload()
+            try:
+                wav = cbx.ENGINE.synth_chunk(snippet, None, speed,
+                                             exaggeration=exag, reference_path=ref)
+            finally:
+                cbx.ENGINE.unload()
+        else:
+            wav = ENGINE.synth_chunk(snippet, job_like.get("voice"), speed)
+    tmp_wav = os.path.join(out_dir, "preview.wav")
+    sf.write(tmp_wav, wav, SAMPLE_RATE)
+    mp3 = os.path.join(out_dir, "preview.mp3")
+    af = _loudnorm_af(job_like)
+    args = ["-i", tmp_wav] + (["-af", af] if af else []) + \
+           ["-c:a", "libmp3lame", "-q:a", "4", mp3]
+    _ffmpeg(args)
+    try:
+        os.remove(tmp_wav)
+    except OSError:
+        pass
+    return mp3
+
+
 def run(job: dict, progress) -> dict:
     workdir = job["workdir"]
     os.makedirs(workdir, exist_ok=True)
@@ -232,7 +273,7 @@ def run(job: dict, progress) -> dict:
 
     # ---- 2. Plan speak/pause ops (for accurate progress) ----------------
     for ch in chapters:
-        ch["ops"] = _plan_chapter(ch, multivoice, voice, cast_map, speed)
+        ch["ops"] = _plan_chapter(ch, multivoice, voice, cast_map, speed, exaggeration)
     total_chunks = sum(1 for c in chapters for o in c["ops"]
                        if o["kind"] == "speak") or 1
     mode = "multi-voice" if multivoice else "single voice"
@@ -273,9 +314,11 @@ def run(job: dict, progress) -> dict:
                     # several lines in a row flows as one continuous turn.
                     if multivoice and prev_voice is not None and op["voice"] != prev_voice:
                         parts.append(SEG_GAP)
+                    say = pron.apply(op["text"])          # user pronunciation fixes
                     parts.append(synth.synth_chunk(
-                        op["text"], op["voice"], op["speed"],
-                        exaggeration=exaggeration, reference_path=reference_path))
+                        say, op["voice"], op["speed"],
+                        exaggeration=op.get("exaggeration", exaggeration),
+                        reference_path=reference_path))
                     prev_voice = op["voice"]
                     done += 1
                     elapsed = time.time() - t0

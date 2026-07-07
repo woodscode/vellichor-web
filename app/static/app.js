@@ -328,14 +328,27 @@ function setFile(f) {
 
 // ---------- preview ----------
 $('#previewBtn').addEventListener('click', async () => {
-  const text = ($('#storyText').value || '').trim().slice(0, 400)
+  const text = ($('#storyText').value || '').trim().slice(0, 500)
     || 'Once upon a time, in a land far away, a little hero set off on a grand adventure.';
-  const btn = $('#previewBtn'); btn.disabled = true; btn.textContent = '◌ Synthesizing…';
+  const eng = $('#engineSelect').value || 'kokoro';
+  const btn = $('#previewBtn'); btn.disabled = true;
+  btn.textContent = eng === 'kokoro' ? '◌ Synthesizing…' : '◌ Synthesizing (Chatterbox is slower)…';
   try {
-    const r = await fetch('/api/preview', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ voice: selected, text, speed: +$('#speed').value }),
-    });
+    const fd = new FormData();
+    fd.append('voice', selected);
+    fd.append('engine', eng);
+    fd.append('speed', $('#speed').value);
+    fd.append('exaggeration', $('#exag').value);
+    fd.append('loudness', LOUD_LUFS[+$('#loud').value]);
+    fd.append('text', text);
+    if (eng !== 'kokoro') {
+      if (selectedRef.type === 'oneoff' && selectedRef.file) {
+        fd.append('reference_file', selectedRef.file, selectedRef.file.name || 'reference.webm');
+      } else if (selectedRef.type === 'myvoice') {
+        fd.append('reference_voice', selectedRef.id);
+      }
+    }
+    const r = await fetch('/api/preview', { method: 'POST', body: fd });
     if (!r.ok) throw new Error();
     const blob = await r.blob();
     stopAllAudio();
@@ -642,11 +655,46 @@ $('#logoutBtn').addEventListener('click', async () => {
   await fetch('/api/logout', { method: 'POST' }); location.href = '/login';
 });
 
+// ---------- pronunciations ----------
+async function loadPron() {
+  try { renderPron(((await (await fetch('/api/pronunciations')).json()).rules) || []); }
+  catch (e) {}
+}
+function renderPron(rules) {
+  const list = $('#pronList'); if (!list) return;
+  list.innerHTML = '';
+  if (!rules.length) { list.innerHTML = '<div class="muted small">No rules yet.</div>'; return; }
+  for (const it of rules) {
+    const row = document.createElement('div');
+    row.className = 'pron-row';
+    row.innerHTML = `<span class="pron-from">${it.from}</span><span class="pron-arrow">→</span><span class="pron-to">${it.to || '—'}</span>`;
+    const del = document.createElement('button');
+    del.className = 'ref-del'; del.textContent = '✕'; del.title = 'Delete';
+    del.addEventListener('click', async () => {
+      await fetch('/api/pronunciations/' + encodeURIComponent(it.from), { method: 'DELETE' });
+      loadPron();
+    });
+    row.appendChild(del);
+    list.appendChild(row);
+  }
+}
+$('#pronAdd').addEventListener('click', async () => {
+  const from = $('#pronFrom').value.trim(), to = $('#pronTo').value.trim();
+  if (!from) { toast('Enter a word', 'bad'); return; }
+  const r = await fetch('/api/pronunciations', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to }),
+  });
+  if (r.ok) { $('#pronFrom').value = ''; $('#pronTo').value = ''; renderPron((await r.json()).rules || []); toast('Added', 'good'); }
+  else toast('Could not add', 'bad');
+});
+
 // ---------- boot ----------
 loadVoices();
 loadEngines();
 loadMyVoices();
 loadAmbience();
+loadPron();
 checkSmartcast();
 refreshJobs();
 setInterval(refreshJobs, 1500);
