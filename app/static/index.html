@@ -40,6 +40,12 @@
 
       <div class="tabpane active" id="pane-write">
         <input id="storyTitle" class="field" placeholder="Story title (e.g. The Dragon Who Lost His Roar)" />
+        <div class="stories-row">
+          <select id="storySelect" class="field"><option value="">📚 My stories…</option></select>
+          <button id="storyLoad" class="ghost" type="button">Load</button>
+          <button id="storySave" class="ghost" type="button">Save</button>
+          <button id="storyDel" class="ghost" type="button" title="Delete story">✕</button>
+        </div>
         <textarea id="storyText" class="field story" placeholder="Once upon a time…
 
 Write or paste your story here. Use # Heading lines to split it into chapters."></textarea>

@@ -753,13 +753,77 @@ $('#pronAdd').addEventListener('click', async () => {
   else toast('Could not add', 'bad');
 });
 
+// ---------- My Stories library ----------
+let STORIES = [], currentStoryId = null, draftTimer = null;
+async function loadStories() {
+  try { STORIES = ((await (await fetch('/api/stories')).json()).stories) || []; }
+  catch (e) { STORIES = []; }
+  const sel = $('#storySelect');
+  sel.innerHTML = '<option value="">📚 My stories…</option>';
+  for (const s of STORIES) {
+    const o = document.createElement('option'); o.value = s.id; o.textContent = s.title;
+    sel.appendChild(o);
+  }
+  if (currentStoryId) sel.value = currentStoryId;
+}
+$('#storyLoad').addEventListener('click', async () => {
+  const id = $('#storySelect').value;
+  if (!id) { toast('Pick a story to load', 'bad'); return; }
+  const r = await fetch('/api/stories/' + id);
+  if (!r.ok) { toast('Could not load', 'bad'); return; }
+  const s = await r.json();
+  $('#storyTitle').value = s.title || ''; $('#storyText').value = s.text || '';
+  currentStoryId = s.id; saveDraft();
+  $('.tab[data-tab="write"]').click();
+  toast('Story loaded', 'good');
+});
+$('#storySave').addEventListener('click', async () => {
+  const title = $('#storyTitle').value.trim(), text = $('#storyText').value.trim();
+  if (!text) { toast('Nothing to save yet', 'bad'); return; }
+  const r = await fetch('/api/stories', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: currentStoryId, title, text }),
+  });
+  if (!r.ok) { toast('Could not save', 'bad'); return; }
+  const s = await r.json(); currentStoryId = s.id;
+  await loadStories(); $('#storySelect').value = s.id;
+  toast(currentStoryId ? 'Story saved' : 'Story saved', 'good');
+});
+$('#storyDel').addEventListener('click', async () => {
+  const id = $('#storySelect').value;
+  if (!id) { toast('Pick a story to delete', 'bad'); return; }
+  if (!confirm('Delete this saved story? (the text in the editor stays)')) return;
+  await fetch('/api/stories/' + id, { method: 'DELETE' });
+  if (currentStoryId === id) currentStoryId = null;
+  loadStories();
+});
+// Browser autosave so a refresh/close never loses the current draft.
+function saveDraft() {
+  try { localStorage.setItem('vellichor-draft',
+    JSON.stringify({ title: $('#storyTitle').value, text: $('#storyText').value })); } catch (e) {}
+}
+function restoreDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem('vellichor-draft') || 'null');
+    if (d && !$('#storyText').value && !$('#storyTitle').value) {
+      if (d.title) $('#storyTitle').value = d.title;
+      if (d.text) $('#storyText').value = d.text;
+    }
+  } catch (e) {}
+}
+['#storyTitle', '#storyText'].forEach(sel => $(sel).addEventListener('input', () => {
+  clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 800);
+}));
+
 // ---------- boot ----------
+restoreDraft();
 loadVoices();
 loadEngines();
 loadMyVoices();
 loadAmbience();
 loadPron();
 loadPresets();
+loadStories();
 checkSmartcast();
 refreshJobs();
 setInterval(refreshJobs, 1500);

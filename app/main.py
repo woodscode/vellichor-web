@@ -19,6 +19,7 @@ import smartcast
 import engines
 import myvoices
 import presets
+import stories
 import pronunciations as pron
 import convert
 import gpu
@@ -184,6 +185,36 @@ async def presets_add(request: Request):
 def presets_delete(pid: str):
     if not presets.delete(pid):
         raise HTTPException(404, "No such preset")
+    return {"ok": True}
+
+
+# ---- saved stories (My Stories) -----------------------------------------
+@app.get("/api/stories")
+def stories_list():
+    return {"stories": stories.list_all()}
+
+
+@app.get("/api/stories/{sid}")
+def stories_get(sid: str):
+    s = stories.get(sid)
+    if not s:
+        raise HTTPException(404, "No such story")
+    return {"id": s["id"], "title": s.get("title", ""), "text": s.get("text", "")}
+
+
+@app.post("/api/stories")
+async def stories_save(request: Request):
+    body = await request.json()
+    try:
+        return stories.save(body.get("id"), body.get("title", ""), body.get("text", ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/stories/{sid}")
+def stories_delete(sid: str):
+    if not stories.delete(sid):
+        raise HTTPException(404, "No such story")
     return {"ok": True}
 
 

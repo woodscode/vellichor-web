@@ -323,3 +323,7 @@ select.field { appearance: none; background-image:
 /* ---- setting presets ---- */
 .preset-row { display: flex; gap: 8px; margin: 4px 0; align-items: center; }
 .preset-row .field { flex: 1; min-width: 0; }
+
+/* ---- My Stories row ---- */
+.stories-row { display: flex; gap: 8px; margin: 6px 0; align-items: center; }
+.stories-row .field { flex: 1; min-width: 0; }
