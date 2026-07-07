@@ -167,7 +167,7 @@ $('#exag').addEventListener('input', (e) => $('#exagVal').textContent = (+e.targ
 let MY_VOICES = [];
 // how to source the clone reference: {type:'preset'} | {type:'myvoice',id} | {type:'oneoff',file,label}
 let selectedRef = { type: 'preset' };
-let recordedBlob = null, mediaRec = null, recChunks = [], recTimerId = null, recSeconds = 0;
+let recordedBlob = null, pendingClip = null, mediaRec = null, recChunks = [], recTimerId = null, recSeconds = 0;
 
 const REC_SCRIPT = "Once upon a time, in a cosy little house at the edge of a quiet wood, " +
   "there lived a curious child who loved stories more than anything. Every night, as the " +
@@ -222,10 +222,21 @@ function setOneOff(file, label) {
   renderMyVoices();
 }
 function blobExt(b) { return (b.type || '').includes('ogg') ? 'ogg' : 'webm'; }
+function clipToFile(clip) {
+  if (clip instanceof File) return clip;
+  return new File([clip], 'recording.' + blobExt(clip), { type: clip.type || 'audio/webm' });
+}
 
+// Uploading a clip behaves like a recording: you can Use it once OR Save it to My Voices.
 $('#referenceInput').addEventListener('change', (e) => {
-  const f = e.target.files[0];
-  if (f) setOneOff(f, f.name + ' (this book only)');
+  const f = e.target.files[0]; if (!f) return;
+  pendingClip = f;
+  const pb = $('#recPlayback'); pb.src = URL.createObjectURL(f); pb.hidden = false;
+  $('#recPanel').hidden = false;
+  $('#recUse').disabled = false; $('#recSave').disabled = false;
+  $('#recName').value = (f.name || '').replace(/\.[^.]+$/, '');
+  $('#recMsg').textContent = `Selected "${f.name}" — Use for this book, or name it and Save.`;
+  setOneOff(f, f.name + ' (this book only)');
 });
 
 // ---- recorder ----
@@ -234,10 +245,10 @@ $('#recToggle').addEventListener('click', () => { const p = $('#recPanel'); p.hi
 $('#recStart').addEventListener('click', startRecording);
 $('#recStop').addEventListener('click', stopRecording);
 $('#recUse').addEventListener('click', () => {
-  if (!recordedBlob) return;
-  const file = new File([recordedBlob], 'recording.' + blobExt(recordedBlob), { type: recordedBlob.type });
-  setOneOff(file, '🎙️ recording (this book only)');
-  toast('Recording set for this book', 'good');
+  if (!pendingClip) return;
+  const f = clipToFile(pendingClip);
+  setOneOff(f, (pendingClip instanceof File ? f.name : '🎙️ recording') + ' (this book only)');
+  toast('Set for this book', 'good');
 });
 $('#recSave').addEventListener('click', saveRecording);
 
@@ -254,6 +265,7 @@ async function startRecording() {
     mediaRec.onstop = () => {
       stream.getTracks().forEach(t => t.stop());
       recordedBlob = new Blob(recChunks, { type: mediaRec.mimeType || 'audio/webm' });
+      pendingClip = recordedBlob;
       const pb = $('#recPlayback'); pb.src = URL.createObjectURL(recordedBlob); pb.hidden = false;
       $('#recUse').disabled = false; $('#recSave').disabled = false;
     };
@@ -276,12 +288,13 @@ function stopRecording() {
   $('#recMsg').textContent = 'Recorded ' + $('#recTimer').textContent + ' — review, then Use or Save.';
 }
 async function saveRecording() {
-  if (!recordedBlob) return;
+  if (!pendingClip) return;
   const name = ($('#recName').value || '').trim();
   if (!name) { toast('Give the voice a name first', 'bad'); return; }
+  const f = clipToFile(pendingClip);
   const fd = new FormData();
   fd.append('name', name);
-  fd.append('audio', recordedBlob, 'recording.' + blobExt(recordedBlob));
+  fd.append('audio', f, f.name);
   const btn = $('#recSave'); btn.disabled = true; btn.textContent = '◌ Saving…';
   try {
     const r = await fetch('/api/myvoices', { method: 'POST', body: fd });
@@ -412,7 +425,7 @@ function renderJobs(jobs) {
       <div class="job-head">
         <div>
           <div class="job-title">${j.title || 'Story'}</div>
-          <div class="job-sub">${v ? v.flag + ' ' + v.name : j.voice} · ${(+j.speed).toFixed(2)}×</div>
+          <div class="job-sub">${j.voice_label || (v ? v.flag + ' ' + v.name : j.voice)}${(j.engine && j.engine !== 'kokoro') ? '' : ' · ' + (+j.speed).toFixed(2) + '×'}</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="status ${j.status}">${j.status}</span>

@@ -352,6 +352,22 @@ async def convert_endpoint(
             with open(reference_path, "wb") as f:
                 shutil.copyfileobj(reference_file.file, f)
 
+    # Human-readable label for the Conversions list — reflects the engine and the
+    # actual voice used (a cloned/recorded voice, not the underlying Kokoro pick).
+    eng = engines.resolve(engine)
+    vname = (voicecat.get(voice) or {}).get("name", voice)
+    if eng == "chatterbox":
+        if reference_voice:
+            rv = next((x for x in myvoices.list_all() if x["id"] == reference_voice), None)
+            src = (rv or {}).get("name") or "Saved voice"
+        elif reference_path:
+            src = "Custom clip"
+        else:
+            src = vname
+        voice_label = f"{src} · Chatterbox"
+    else:
+        voice_label = vname
+
     spec = {
         "id": jid,
         "source": source,
@@ -359,7 +375,8 @@ async def convert_endpoint(
         "title": title or "Story",
         "author": author or "Vellichor",
         "voice": voice,
-        "engine": engines.resolve(engine),
+        "engine": eng,
+        "voice_label": voice_label,
         "speed": max(0.5, min(2.0, speed)),
         "exaggeration": max(0.0, min(1.0, exaggeration)),
         "reference_path": reference_path,

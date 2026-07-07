@@ -75,8 +75,8 @@ class JobManager:
     def public(self, job: dict) -> dict:
         """A JSON-safe view (hide internal paths)."""
         keys = ("id", "status", "stage", "percent", "eta", "title", "author",
-                "voice", "speed", "chapters_total", "chunks_total",
-                "chunks_done", "error", "created")
+                "voice", "engine", "voice_label", "speed", "chapters_total",
+                "chunks_total", "chunks_done", "error", "created")
         out = {k: job.get(k) for k in keys}
         out["log"] = job.get("log", [])[-30:]
         res = job.get("result")
