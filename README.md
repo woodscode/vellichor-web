@@ -45,14 +45,27 @@ Store that password in your password manager.
 
 ## Features
 - Built-in **story editor** (type/paste, `#` lines become chapters) + upload
-  `.txt`, `.md`, `.epub`, `.pdf`, `.docx`.
+  `.txt`, `.md`, `.epub`, `.kepub`, `.pdf`, `.docx`, `.html`, `.rtf`, `.fb2`.
+  EPUBs are split into chapters in reading order using the book's table of
+  contents; PDFs split on their bookmarks/outline when present.
+- **📚 Book library & batch conversion** — a managed shelf of source files at
+  `data/books/`. Add files or a whole folder from the *Upload* tab, or just drop
+  ebooks straight into the `data/books` share and they appear automatically.
+  Then **Convert all**, or tick a few and **Convert selected** — each book shows
+  its detected chapter count, and batch jobs queue one at a time using the
+  voice/settings you've chosen.
 - **Narration directives** — inline cues the studio interprets itself:
   `[pause 3s]` / `[pause]` / `[beat]` insert real silence, and `[slow]`,
   `[fast]`, `[normal]` change the pace of the following text. (These are
   reserved words — they're never read aloud or mistaken for a `[Name]` speaker
   tag.)
-- **Voice picker** with 35 voices, grouped/filterable, each with a ▶ sample.
-  Story-friendly voices are starred (★). `af_heart` is the default.
+- **Voice picker** with 35 voices, grouped/filterable, each with a ▶ sample you
+  can play/stop (every play button toggles). Story-friendly voices are starred
+  (★). `af_heart` is the default.
+- **Saved presets & My Stories** — save a bundle of settings (voice, engine,
+  loudness, ambience…) as a named preset and reapply it per series; keep
+  works-in-progress in a **My Stories** list. Re-saving a preset updates it in
+  place rather than duplicating.
 - **Live preview** — hear your chosen voice read the current text before
   committing to a full conversion.
 - **Choose your TTS engine** (dropdown, per conversion):
@@ -88,8 +101,9 @@ Store that password in your password manager.
 - Output: **chaptered M4B** + **per-chapter MP3** (zip). Both downloadable.
 - **Auto-export** to an Audiobookshelf library (path + owner UID/GID
   configurable; see `docker-compose.yml`).
-- **🎨 Themes** — Dark, Light, Sepia, and Midnight, switchable from the header
-  and remembered per browser.
+- **🎨 Themes** — **Bookshop Light** (aged paper), **Bookshop Dark** (a lamplit
+  study), and **Violet** (the original look), switchable from the header and
+  remembered per browser.
 - Password login; job history survives restarts.
 
 ## Managing it
@@ -145,8 +159,10 @@ Notes:
   conversion finishes, e.g. `http://<server-ip>:8087/vellichor`.
 
 ## Data
-- `./data/` — uploads, job workdirs, job history (`jobs.json`), cached voice
-  samples (`samples/`), and the Hugging Face model cache (`hf-cache/`).
+- `./data/` — uploads, job workdirs, job history (`jobs.json`), your **book
+  library** (`books/`), saved cloning voices (`voices/`), setting presets and
+  saved stories, cached voice samples (`samples/`), and the Hugging Face model
+  cache (`hf-cache/`).
 - Models download on first use and are cached in `./data/hf-cache`.
 
 ## Notes
@@ -166,8 +182,8 @@ Notes:
   `SECRET_KEY` and is gitignored — never commit it.
 - **`SECRET_KEY`** signs the session cookie. Generate one with
   `openssl rand -hex 32`. Changing it invalidates existing logins.
-- **Uploaded files** (epub/pdf/docx) are parsed server-side; only allow
-  uploads from people you trust.
+- **Uploaded documents** (epub/pdf/docx/html/rtf/fb2/…) are parsed server-side;
+  only allow uploads from people you trust.
 
 ## License
 [MIT](LICENSE) — free to use, modify, and redistribute. TTS by
