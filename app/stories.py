@@ -45,16 +45,23 @@ def save(sid: str, title: str, text: str) -> dict:
     title = (title or "").strip()[:120] or "Untitled"
     items = _load()
     now = int(time.time())
-    for s in items:
-        if sid and s["id"] == sid:          # update existing
-            s.update(title=title, text=text, updated=now)
-            _write(items)
-            return {"id": s["id"], "title": title, "updated": now}
+    # Update in place — by explicit id, else by matching title (case-insensitive)
+    # — so re-saving doesn't pile up duplicate drafts.
+    target = None
+    if sid:
+        target = next((s for s in items if s["id"] == sid), None)
+    if target is None:
+        target = next((s for s in items
+                       if s.get("title", "").lower() == title.lower()), None)
+    if target is not None:
+        target.update(title=title, text=text, updated=now)
+        _write(items)
+        return {"id": target["id"], "title": title, "updated": now, "created_new": False}
     sid = uuid.uuid4().hex[:12]             # new
     items.append({"id": sid, "title": title, "text": text,
                   "created": now, "updated": now})
     _write(items)
-    return {"id": sid, "title": title, "updated": now}
+    return {"id": sid, "title": title, "updated": now, "created_new": True}
 
 
 def delete(sid: str) -> bool:

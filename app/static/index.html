@@ -13,7 +13,7 @@
     })();
   </script>
   <title>Vellichor · Audiobook Studio</title>
-  <link rel="stylesheet" href="/static/style.css?v=3" />
+  <link rel="stylesheet" href="/static/style.css?v=4" />
 </head>
 <body>
   <header class="topbar">
@@ -83,9 +83,11 @@ Write or paste your story here. Use # Heading lines to split it into chapters.">
             <button id="bookConvertSel" class="ghost" type="button">Convert selected</button>
             <button id="bookConvertAll" class="primary" type="button">Convert all</button>
           </div>
-          <div class="hint">Stored in <code>/data/books</code> — you can also drop epubs straight into the
+          <div class="hint">Stored in <code>/data/books</code> — you can also drop ebooks straight into the
             <code>appdata/vellichor/data/books</code> share and they'll appear here. Batch conversions use the
-            voice &amp; settings on the right (multi-voice auto-casts per book).</div>
+            settings on the right — voice, engine, speed, loudness, ambience, the <strong>output formats
+            (M4B/MP3)</strong> and the <strong>Add to Audiobookshelf</strong> toggle — and auto-cast per book if
+            multi-voice is on. (Cover art applies to single conversions only.)</div>
         </div>
       </div>
     </section>
@@ -249,6 +251,6 @@ Write or paste your story here. Use # Heading lines to split it into chapters.">
   </section>
 
   <div id="toast" class="toast"></div>
-  <script src="/static/app.js?v=3"></script>
+  <script src="/static/app.js?v=4"></script>
 </body>
 </html>

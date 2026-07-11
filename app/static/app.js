@@ -91,8 +91,30 @@ function renderVoices() {
 
 function selectVoice(id) {
   selected = id;
-  const v = VOICES.find(x => x.id === id);
-  if (v) $('#selectedVoice').innerHTML = `${v.flag} ${v.name} · <span class="muted">${v.accent} ${v.gender}</span>`;
+  refreshSelectedVoice();
+}
+
+// Show what will actually be spoken: the Kokoro preset, or — on an expressive
+// engine with a custom source — the cloned voice, so the box reflects reality.
+function refreshSelectedVoice() {
+  const box = $('#selectedVoice'); if (!box) return;
+  const v = VOICES.find(x => x.id === selected);
+  const engEl = $('#engineSelect');
+  const eng = (engEl && engEl.value) || 'kokoro';
+  if (eng !== 'kokoro') {
+    if (selectedRef.type === 'myvoice') {
+      const mv = MY_VOICES.find(x => x.id === selectedRef.id);
+      box.innerHTML = `🎙️ ${mv ? mv.name : 'Saved voice'} · <span class="muted">cloned · Chatterbox</span>`;
+      return;
+    }
+    if (selectedRef.type === 'oneoff') {
+      box.innerHTML = `🎙️ ${selectedRef.label || 'Custom clip'} · <span class="muted">cloned · Chatterbox</span>`;
+      return;
+    }
+    box.innerHTML = v ? `${v.flag} ${v.name} · <span class="muted">cloned · Chatterbox</span>` : '—';
+    return;
+  }
+  box.innerHTML = v ? `${v.flag} ${v.name} · <span class="muted">${v.accent} ${v.gender}</span>` : '—';
 }
 
 // The play button that is currently sounding, so we can reset it to ▶ when the
@@ -183,6 +205,7 @@ function updateEngineUI() {
   $('#engineBlurb').textContent = e ? (e.blurb || '') : '';
   const expressive = !!e && (e.controls || []).includes('exaggeration');
   $('#expressiveControls').hidden = !expressive;
+  refreshSelectedVoice();
 }
 $('#exag').addEventListener('input', (e) => $('#exagVal').textContent = (+e.target.value).toFixed(2));
 
@@ -237,6 +260,7 @@ function renderMyVoices() {
     r.appendChild(play); r.appendChild(del);
     list.appendChild(r);
   }
+  refreshSelectedVoice();
 }
 
 function setOneOff(file, label) {
@@ -921,7 +945,7 @@ $('#storySave').addEventListener('click', async () => {
   if (!r.ok) { toast('Could not save', 'bad'); return; }
   const s = await r.json(); currentStoryId = s.id;
   await loadStories(); $('#storySelect').value = s.id;
-  toast(currentStoryId ? 'Story saved' : 'Story saved', 'good');
+  toast(s.created_new ? `Saved “${s.title}”` : `Updated “${s.title}”`, 'good');
 });
 $('#storyDel').addEventListener('click', async () => {
   const id = $('#storySelect').value;
