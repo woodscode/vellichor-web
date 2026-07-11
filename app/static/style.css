@@ -1,9 +1,61 @@
-/* ===== Themes =====
-   :root is the default "Dark" theme. [data-theme="…"] blocks override the
-   palette; everything else in this file reads these variables, so themes need
-   no per-component rules. Set via the header switcher (persisted in
-   localStorage as "vellichor-theme"). */
+/* ===== Themes ("the secondhand bookshop") =====
+   Three palettes — Bookshop Light (default :root), Bookshop Dark, and Violet
+   (the app's original look, kept as a choice). Every component reads these
+   variables, so themes need no per-component rules. Set via the header switcher
+   (persisted in localStorage as "vellichor-theme"). */
 :root {
+  --radius: 14px;
+  /* old-style serif for display (wordmark, headings, titles); UI stays sans */
+  --serif: "Hoefler Text", "Baskerville Old Face", Baskerville, "Iowan Old Style",
+           "Palatino Linotype", "Book Antiqua", Palatino, Cambria, Georgia, serif;
+  --app-bg:
+    radial-gradient(1200px 600px at 85% -10%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 55%),
+    var(--bg);
+
+  /* ---- Bookshop Light (default): aged paper + oxblood + gilt ---- */
+  --bg: #efe6d3;
+  --bg-2: #e6dcc6;
+  --panel: #f6f0e1;
+  --panel-2: #e8dec8;
+  --border: #d6c8ac;
+  --text: #241a11;
+  --muted: #5e5241;
+  --accent: #8c3a30;      /* oxblood leather */
+  --accent-2: #8f6c1f;    /* antique gilt */
+  --good: #3f6f3f;
+  --bad: #a33a3a;
+  --warn: #8f6c1f;
+  --shadow: 0 10px 30px rgba(43,32,24,.10);
+  --topbar-bg: rgba(239,230,211,.80);
+  --log-bg: #e8dec8;
+  color-scheme: light;
+}
+
+[data-theme="light"] { color-scheme: light; }  /* palette inherited from :root */
+
+/* ---- Bookshop Dark: a lamplit study ---- */
+[data-theme="dark"] {
+  --bg: #17130e;
+  --bg-2: #120f0a;
+  --panel: #201a13;
+  --panel-2: #271f16;
+  --border: #40352a;
+  --text: #ece0cd;
+  --muted: #b1a288;
+  --accent: #c65a4b;      /* warm brick-leather */
+  --accent-2: #d8b263;    /* lifted gilt */
+  --good: #74c78a;
+  --bad: #e98080;
+  --warn: #d8b263;
+  --shadow: 0 12px 32px rgba(0,0,0,.45);
+  --topbar-bg: rgba(23,19,14,.80);
+  --log-bg: #12100b;
+  color-scheme: dark;
+}
+
+/* ---- Violet: the app's original dark look ---- */
+[data-theme="violet"] {
   --bg: #0c0f17;
   --bg-2: #121726;
   --panel: #161c2c;
@@ -16,71 +68,9 @@
   --good: #38d39f;
   --bad: #ff6b6b;
   --warn: #ffd166;
-  --radius: 14px;
   --shadow: 0 10px 30px rgba(0,0,0,.35);
-  --app-bg:
-    radial-gradient(1200px 600px at 85% -10%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
-    radial-gradient(900px 500px at -10% 10%, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 55%),
-    var(--bg);
   --topbar-bg: rgba(12,15,23,.7);
   --log-bg: #0a0d14;
-  color-scheme: dark;
-}
-
-[data-theme="light"] {
-  --bg: #f4f6fb;
-  --bg-2: #eaedf5;
-  --panel: #ffffff;
-  --panel-2: #f0f2f8;
-  --border: #d6dbe8;
-  --text: #1a1f2e;
-  --muted: #5d6577;
-  --accent: #6c5cff;
-  --accent-2: #0e9fd6;
-  --good: #1fa97f;
-  --bad: #e23b3b;
-  --warn: #c8902a;
-  --shadow: 0 10px 30px rgba(20,30,60,.12);
-  --topbar-bg: rgba(244,246,251,.72);
-  --log-bg: #eef1f7;
-  color-scheme: light;
-}
-
-[data-theme="sepia"] {
-  --bg: #f3e9d8;
-  --bg-2: #ece0c9;
-  --panel: #fbf3e4;
-  --panel-2: #efe3cd;
-  --border: #d8c7a6;
-  --text: #3a2f22;
-  --muted: #7a6a52;
-  --accent: #b5793a;
-  --accent-2: #8a6d2f;
-  --good: #5a8a3c;
-  --bad: #b8462f;
-  --warn: #b07d28;
-  --shadow: 0 10px 30px rgba(90,70,40,.18);
-  --topbar-bg: rgba(243,233,216,.75);
-  --log-bg: #e9dcc2;
-  color-scheme: light;
-}
-
-[data-theme="midnight"] {
-  --bg: #05070d;
-  --bg-2: #0a0e18;
-  --panel: #0d1220;
-  --panel-2: #131a2c;
-  --border: #1d2740;
-  --text: #dfe6f5;
-  --muted: #79839e;
-  --accent: #4c9cff;
-  --accent-2: #36d6c3;
-  --good: #38d39f;
-  --bad: #ff6b6b;
-  --warn: #ffd166;
-  --shadow: 0 12px 36px rgba(0,0,0,.55);
-  --topbar-bg: rgba(5,7,13,.78);
-  --log-bg: #04060b;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -93,12 +83,16 @@ body {
   background: var(--app-bg);
   background-attachment: fixed;
   color: var(--text);
-  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   min-height: 100vh;
   transition: color .2s ease;
 }
-h1, h2 { font-weight: 650; letter-spacing: .2px; }
-h2 { font-size: 1.05rem; margin: 0 0 14px; }
+/* faint paper grain over the ground (behind all content) */
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+h1, h2 { font-family: var(--serif); font-weight: 600; letter-spacing: .2px; }
+h2 { font-size: 1.18rem; margin: 0 0 14px; }
+.job-title { font-family: var(--serif); }
 .muted { color: var(--muted); }
 .small { font-size: .82rem; }
 code { background: var(--panel-2); padding: 1px 6px; border-radius: 6px; font-size: .85em; }
@@ -109,8 +103,10 @@ code { background: var(--panel-2); padding: 1px 6px; border-radius: 6px; font-si
   padding: 14px 24px; border-bottom: 1px solid var(--border);
   background: var(--topbar-bg); backdrop-filter: blur(10px);
   position: sticky; top: 0; z-index: 20;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent-2) 45%, transparent);   /* gilt title-page rule */
 }
-.brand { font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+.brand { font-family: var(--serif); font-size: 1.4rem; font-weight: 600; display: flex; align-items: baseline; gap: 10px; }
+.brand .def { font-family: var(--serif); font-style: italic; font-size: .8rem; color: var(--muted); font-weight: 400; }
 .logo { font-size: 1.5rem; }
 .tag { font-size: .65rem; text-transform: uppercase; letter-spacing: 2px;
   color: var(--accent-2); border: 1px solid var(--border); padding: 2px 7px; border-radius: 20px; }
@@ -135,6 +131,17 @@ code { background: var(--panel-2); padding: 1px 6px; border-radius: 6px; font-si
   padding: 18px; box-shadow: var(--shadow);
 }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* ---- step headers (Ⅰ the text · Ⅱ the voices · Ⅲ the finish) ---- */
+.step { display: flex; align-items: baseline; gap: 11px; margin-bottom: 14px; }
+.panel-head .step { margin-bottom: 0; }
+.step .num { font-family: var(--serif); font-weight: 700; color: var(--accent); font-size: .95rem;
+  width: 27px; height: 27px; flex: none; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+.step .t { font-family: var(--serif); font-size: 1.18rem; font-weight: 600; line-height: 1.15; }
+.step .s { color: var(--muted); font-size: .78rem; margin-top: 2px; }
+/* multi-voice cast, now living under the voice picker */
+.cast-block { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border); }
 
 /* ---- fields ---- */
 .field {
@@ -208,7 +215,7 @@ textarea.field { font-family: inherit; }
   background: var(--panel-2); color: var(--text); cursor: pointer; font-size: 1rem; transition: .15s; }
 .vc-play:hover { background: var(--accent); border-color: var(--accent); }
 .vc-play.loading { opacity: .5; }
-.vc-play.playing { background: var(--accent); border-color: var(--accent); color: #fff; }
+.vc-play.playing { background: var(--accent-2); border-color: var(--accent-2); color: #20160a; }
 
 /* ---- settings ---- */
 .selected-voice { padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--border);
@@ -222,7 +229,7 @@ input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); }
 
 /* ---- buttons ---- */
 button { font: inherit; }
-.primary { background: linear-gradient(135deg, var(--accent), #5a4bff); color: #fff;
+.primary { background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 68%, #000)); color: #fff;
   border: none; padding: 13px; border-radius: 11px; cursor: pointer; font-weight: 600; transition: .15s; }
 .primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
 .primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
@@ -266,12 +273,12 @@ select.field { appearance: none; background-image:
 .job-title { font-weight: 600; }
 .job-sub { color: var(--muted); font-size: .82rem; }
 .status { font-size: .72rem; padding: 3px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: .5px; }
-.status.running { background: rgba(76,201,240,.15); color: var(--accent-2); }
-.status.queued { background: rgba(255,209,102,.15); color: var(--warn); }
-.status.done { background: rgba(56,211,159,.15); color: var(--good); }
-.status.error, .status.interrupted { background: rgba(255,107,107,.15); color: var(--bad); }
-.status.cancelled { background: rgba(139,147,173,.18); color: var(--muted); }
-.job-stop { background: rgba(255,107,107,.12); border: 1px solid rgba(255,107,107,.4);
+.status.running { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.status.queued { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.status.done { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+.status.error, .status.interrupted { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+.status.cancelled { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
+.job-stop { background: color-mix(in srgb, var(--bad) 12%, transparent); border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent);
   color: var(--bad); padding: 5px 12px; border-radius: 8px; cursor: pointer; font-size: .8rem; transition: .15s; }
 .job-stop:hover { background: var(--bad); color: #fff; }
 .job-stop:disabled { opacity: .6; cursor: default; }

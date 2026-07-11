@@ -24,8 +24,12 @@ const toast = (msg, kind = '') => {
 (function initTheme() {
   const sel = $('#themeSelect');
   if (!sel) return;
+  const VALID = ['light', 'dark', 'violet'];
   let saved = 'dark';
   try { saved = localStorage.getItem('vellichor-theme') || 'dark'; } catch (e) {}
+  if (!VALID.includes(saved)) saved = 'dark';   // migrate retired themes (sepia/midnight)
+  document.documentElement.setAttribute('data-theme', saved);
+  try { localStorage.setItem('vellichor-theme', saved); } catch (e) {}
   sel.value = saved;
   sel.addEventListener('change', () => {
     document.documentElement.setAttribute('data-theme', sel.value);
