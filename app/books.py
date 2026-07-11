@@ -38,7 +38,19 @@ def _write(items):
 def _public(it: dict) -> dict:
     return {"id": it["id"], "name": it["name"], "filename": it["filename"],
             "ext": os.path.splitext(it["filename"])[1].lower(),
-            "size": it.get("size", 0), "added": it.get("added", 0)}
+            "size": it.get("size", 0), "added": it.get("added", 0),
+            "chapters": it.get("chapters"), "dtitle": it.get("dtitle")}
+
+
+def _probe(path: str) -> dict:
+    """Best-effort: detect the chapter count and embedded title so the UI can
+    show them. Never fatal — an unparseable file just shows without them."""
+    try:
+        import extract as extractor
+        chapters, dtitle = extractor.extract(path)
+        return {"chapters": len(chapters), "dtitle": (dtitle or "").strip()[:200]}
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 def _reconcile(items):
@@ -95,8 +107,13 @@ def save(src_path: str, original_filename: str) -> dict:
         raise ValueError(f"Unsupported file type: {ext}")
     os.makedirs(BOOKS_DIR, exist_ok=True)
     fn = _unique(_safe(original_filename))
-    shutil.copyfile(src_path, os.path.join(BOOKS_DIR, fn))
+    dest = os.path.join(BOOKS_DIR, fn)
+    shutil.copyfile(src_path, dest)
     items = _reconcile(_load())
+    info = _probe(dest)
+    for it in items:
+        if it["filename"] == fn:
+            it.update(info)
     _write(items)
     rec = next((it for it in items if it["filename"] == fn), None)
     return _public(rec) if rec else {}

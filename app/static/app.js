@@ -464,9 +464,17 @@ function renderBooks() {
   for (const b of BOOKS) {
     const row = document.createElement('label');
     row.className = 'book-row';
+    const size = (b.size / 1024).toFixed(0) + ' KB';
+    const meta = (b.chapters != null) ? `${size} · ${b.chapters} ch` : size;
     row.innerHTML = `<input type="checkbox" class="book-check" value="${b.id}" />
       <span class="book-name">${BOOK_ICON(b.ext)} ${b.name}</span>
-      <span class="muted small book-size">${(b.size / 1024).toFixed(0)} KB</span>`;
+      <span class="muted small book-size">${meta}</span>`;
+    if (b.dtitle) row.querySelector('.book-name').title = b.dtitle;
+    const conv = document.createElement('button');
+    conv.type = 'button'; conv.className = 'book-conv'; conv.textContent = 'Convert';
+    conv.title = 'Convert just this book';
+    conv.addEventListener('click', (e) => { e.preventDefault(); convertBooks([b.id]); });
+    row.appendChild(conv);
     const del = document.createElement('button');
     del.type = 'button'; del.className = 'ref-del'; del.textContent = '✕';
     del.title = 'Remove from library (deletes the file)';
@@ -482,7 +490,7 @@ function renderBooks() {
 }
 
 async function uploadBooks(fileList) {
-  const supported = /\.(txt|md|markdown|epub|pdf|docx)$/i;
+  const supported = /\.(txt|md|markdown|epub|kepub|pdf|docx|html?|rtf|fb2)$/i;
   const files = Array.from(fileList || []).filter(f => supported.test(f.name));
   if (!files.length) { toast('No supported book files found', 'bad'); return; }
   const fd = new FormData();

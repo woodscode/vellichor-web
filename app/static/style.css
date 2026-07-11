@@ -178,6 +178,9 @@ textarea.field { font-family: inherit; }
 .book-row:hover { border-color: var(--accent-2); }
 .book-row .book-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .book-row .book-size { flex: 0 0 auto; }
+.book-conv { flex: 0 0 auto; background: var(--bg); border: 1px solid var(--border);
+  color: var(--muted); border-radius: 7px; padding: 3px 9px; font-size: .8rem; cursor: pointer; }
+.book-conv:hover { border-color: var(--accent); color: var(--text); }
 .book-lib-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
 .book-selall { display: flex; align-items: center; gap: 6px; margin-right: auto; color: var(--muted); font-size: .85rem; }
 
