@@ -18,6 +18,7 @@ import ambience as amb
 import smartcast
 import engines
 import myvoices
+import books
 import presets
 import stories
 import pronunciations as pron
@@ -139,6 +140,47 @@ def myvoices_sample(vid: str):
     if not path:
         raise HTTPException(404, "No such voice")
     return FileResponse(path, media_type="audio/wav")
+
+
+# ---- book library (import folder / batch conversion) -------------------
+@app.get("/api/books")
+def books_list():
+    return {"books": books.list_all()}
+
+
+@app.post("/api/books")
+async def books_add(files: list[UploadFile] = File(...)):
+    """Import one or more source files into the library. Unsupported files in
+    the batch are skipped, not fatal (so a whole-folder upload just works)."""
+    from extract import SUPPORTED_EXTS
+    added, skipped = [], []
+    for uf in files:
+        if not uf or not uf.filename:
+            continue
+        ext = os.path.splitext(uf.filename)[1].lower()
+        if ext not in SUPPORTED_EXTS:
+            skipped.append(uf.filename)
+            continue
+        tmp = os.path.join(UPLOAD_DIR, f"bk_{uuid.uuid4().hex}{ext}")
+        with open(tmp, "wb") as f:
+            shutil.copyfileobj(uf.file, f)
+        try:
+            added.append(await run_in_threadpool(books.save, tmp, uf.filename))
+        except Exception:  # noqa: BLE001
+            skipped.append(uf.filename)
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+    return {"added": added, "skipped": skipped}
+
+
+@app.delete("/api/books/{bid}")
+def books_delete(bid: str):
+    if not books.delete(bid):
+        raise HTTPException(404, "No such book")
+    return {"ok": True}
 
 
 # ---- pronunciation dictionary -------------------------------------------
@@ -391,6 +433,7 @@ async def convert_endpoint(
     text: str = Form(""),
     multivoice: bool = Form(False),
     cast: str = Form(""),
+    book_id: str = Form(""),
     ambience: str = Form(""),
     ambience_volume: float = Form(0.12),
     ducking: bool = Form(True),
@@ -426,6 +469,16 @@ async def convert_endpoint(
             shutil.copyfileobj(file.file, f)
         if not title:
             title = os.path.splitext(file.filename)[0]
+    elif book_id:
+        bpath = books.path_for(book_id)
+        if not bpath:
+            raise HTTPException(404, "No such book in the library")
+        ext = os.path.splitext(bpath)[1].lower()
+        source = os.path.join(workdir, "input" + ext)
+        shutil.copyfile(bpath, source)
+        if not title:
+            rec = books.get(book_id)
+            title = (rec or {}).get("name") or os.path.splitext(os.path.basename(bpath))[0]
     elif not text.strip():
         raise HTTPException(400, "Provide some text or a file to convert.")
 

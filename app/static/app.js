@@ -91,20 +91,39 @@ function selectVoice(id) {
   if (v) $('#selectedVoice').innerHTML = `${v.flag} ${v.name} · <span class="muted">${v.accent} ${v.gender}</span>`;
 }
 
+// The play button that is currently sounding, so we can reset it to ▶ when the
+// clip ends, errors, or something else starts playing.
+let activePlayBtn = null;
+function resetPlayBtn() {
+  if (!activePlayBtn) return;
+  activePlayBtn.classList.remove('loading', 'playing');
+  activePlayBtn.textContent = '▶';
+  activePlayBtn = null;
+}
+sampleAudio.addEventListener('ended', resetPlayBtn);
+sampleAudio.addEventListener('error', resetPlayBtn);
+
 function stopAllAudio() {
   try { sampleAudio.pause(); } catch (e) {}
+  resetPlayBtn();
   ['previewAudio', 'ambAudio'].forEach(id => { const a = $('#' + id); if (a) a.pause(); });
   const amb = $('#ambPlay'); if (amb) amb.textContent = '▶ Preview';
 }
 
-function playSample(id, btn) {
+// Any sample play button toggles: click to play (▶→⏸), click again — or let it
+// finish — to stop. Clicking a different button stops whatever was playing.
+function toggleSample(src, btn) {
+  if (activePlayBtn === btn && !sampleAudio.paused) { stopAllAudio(); return; }
   stopAllAudio();
+  activePlayBtn = btn;
   btn.classList.add('loading'); btn.textContent = '◌';
-  sampleAudio.src = `/api/voice-sample/${id}`;
+  sampleAudio.src = src;
   sampleAudio.play()
-    .then(() => { btn.classList.remove('loading'); btn.textContent = '▶'; })
-    .catch(() => { btn.classList.remove('loading'); btn.textContent = '▶'; toast('Could not play sample', 'bad'); });
+    .then(() => { btn.classList.remove('loading'); btn.classList.add('playing'); btn.textContent = '⏸'; })
+    .catch(() => { resetPlayBtn(); toast('Could not play sample', 'bad'); });
 }
+
+function playSample(id, btn) { toggleSample(`/api/voice-sample/${id}`, btn); }
 
 // ---------- tabs ----------
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
@@ -197,8 +216,8 @@ function renderMyVoices() {
   for (const v of MY_VOICES) {
     const r = row(selectedRef.type === 'myvoice' && selectedRef.id === v.id, '🗣️ ' + v.name);
     const play = document.createElement('button');
-    play.type = 'button'; play.className = 'vc-play'; play.textContent = '▶'; play.title = 'Preview';
-    play.addEventListener('click', (e) => { e.preventDefault(); stopAllAudio(); sampleAudio.src = `/api/myvoices/${v.id}/sample`; sampleAudio.play().catch(() => toast('Could not play preview', 'bad')); });
+    play.type = 'button'; play.className = 'vc-play'; play.textContent = '▶'; play.title = 'Preview / stop';
+    play.addEventListener('click', (e) => { e.preventDefault(); toggleSample(`/api/myvoices/${v.id}/sample`, play); });
     const del = document.createElement('button');
     del.type = 'button'; del.className = 'ref-del'; del.textContent = '✕'; del.title = 'Delete';
     del.addEventListener('click', async (e) => {
@@ -352,15 +371,24 @@ $('#previewBtn').addEventListener('click', async () => {
     if (!r.ok) throw new Error();
     const blob = await r.blob();
     stopAllAudio();
-    const a = $('#previewAudio'); a.src = URL.createObjectURL(blob); a.play();
+    const a = $('#previewAudio'); a.hidden = false; a.src = URL.createObjectURL(blob); a.play();
   } catch { toast('Preview failed', 'bad'); }
   btn.disabled = false; btn.textContent = '▶ Preview voice on this text';
 });
 
 // ---------- convert ----------
-$('#convertBtn').addEventListener('click', async () => {
-  const writing = $('.tab[data-tab="write"]').classList.contains('active');
-  const fd = new FormData();
+// Chosen output formats (m4b / mp3), shared by the single + batch paths.
+function getFormats() {
+  const f = [];
+  if ($('#fmtM4b').checked) f.push('m4b');
+  if ($('#fmtMp3').checked) f.push('mp3');
+  return f;
+}
+
+// Append every shared voice/engine/output setting from the right-hand panel.
+// The per-job source (text / file / book_id), title, cover and explicit cast
+// are added by each caller.
+function appendSettings(fd) {
   fd.append('voice', selected);
   const eng = $('#engineSelect').value || 'kokoro';
   fd.append('engine', eng);
@@ -377,24 +405,22 @@ $('#convertBtn').addEventListener('click', async () => {
   fd.append('loudness', LOUD_LUFS[+$('#loud').value]);
   fd.append('author', $('#author').value || 'Vellichor');
   fd.append('export_abs', $('#exportAbs').checked);
-  const formats = [];
-  if ($('#fmtM4b').checked) formats.push('m4b');
-  if ($('#fmtMp3').checked) formats.push('mp3');
-  if (!formats.length) { toast('Pick at least one output format', 'bad'); return; }
-  fd.append('formats', formats.join(','));
-  fd.append('title', $('#storyTitle').value || '');
-  if ($('#coverInput').files[0]) fd.append('cover', $('#coverInput').files[0]);
-
-  // multi-voice
-  const mv = $('#multiVoice').checked;
-  fd.append('multivoice', mv);
-  if (mv) fd.append('cast', JSON.stringify(gatherCast()));
-
-  // ambience
+  fd.append('formats', getFormats().join(','));
+  fd.append('multivoice', $('#multiVoice').checked);
   fd.append('ambience', $('#ambienceSelect').value || '');
   fd.append('ambience_volume', (+$('#ambVol').value / 100).toFixed(3));
   fd.append('ducking', $('#ducking').checked);
   if (ambUpload) fd.append('ambience_file', ambUpload);
+}
+
+$('#convertBtn').addEventListener('click', async () => {
+  const writing = $('.tab[data-tab="write"]').classList.contains('active');
+  if (!getFormats().length) { toast('Pick at least one output format', 'bad'); return; }
+  const fd = new FormData();
+  appendSettings(fd);
+  fd.append('title', $('#storyTitle').value || '');
+  if ($('#coverInput').files[0]) fd.append('cover', $('#coverInput').files[0]);
+  if ($('#multiVoice').checked) fd.append('cast', JSON.stringify(gatherCast()));
 
   if (writing) {
     const text = $('#storyText').value.trim();
@@ -414,6 +440,87 @@ $('#convertBtn').addEventListener('click', async () => {
   } catch (e) { toast('Could not start: ' + e.message, 'bad'); }
   btn.disabled = false; btn.textContent = '🎬 Create audiobook';
 });
+
+// ---------- book library (import folder / batch) ----------
+let BOOKS = [];
+const BOOK_ICON = (ext) => ext === '.epub' ? '📗' : ext === '.pdf' ? '📕'
+  : ext === '.docx' ? '📘' : '📄';
+
+async function loadBooks() {
+  try { BOOKS = (await (await fetch('/api/books')).json()).books || []; }
+  catch (e) { BOOKS = []; }
+  renderBooks();
+}
+
+function renderBooks() {
+  const list = $('#bookList'); if (!list) return;
+  list.innerHTML = '';
+  const selAll = $('#bookSelAll'); if (selAll) selAll.checked = false;
+  if (!BOOKS.length) {
+    list.innerHTML = '<div class="muted small">No books yet. Add files or a folder above, '
+      + 'or drop epubs into the <code>data/books</code> share.</div>';
+    return;
+  }
+  for (const b of BOOKS) {
+    const row = document.createElement('label');
+    row.className = 'book-row';
+    row.innerHTML = `<input type="checkbox" class="book-check" value="${b.id}" />
+      <span class="book-name">${BOOK_ICON(b.ext)} ${b.name}</span>
+      <span class="muted small book-size">${(b.size / 1024).toFixed(0)} KB</span>`;
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'ref-del'; del.textContent = '✕';
+    del.title = 'Remove from library (deletes the file)';
+    del.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!confirm(`Remove "${b.name}" from the library? The file is deleted.`)) return;
+      await fetch('/api/books/' + b.id, { method: 'DELETE' });
+      loadBooks();
+    });
+    row.appendChild(del);
+    list.appendChild(row);
+  }
+}
+
+async function uploadBooks(fileList) {
+  const supported = /\.(txt|md|markdown|epub|pdf|docx)$/i;
+  const files = Array.from(fileList || []).filter(f => supported.test(f.name));
+  if (!files.length) { toast('No supported book files found', 'bad'); return; }
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f, f.name);
+  toast(`Uploading ${files.length} file(s)…`);
+  try {
+    const r = await fetch('/api/books', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    await loadBooks();
+    toast(`Added ${d.added.length} book(s)`
+      + (d.skipped.length ? `, skipped ${d.skipped.length}` : ''), 'good');
+  } catch (e) { toast('Upload failed', 'bad'); }
+}
+$('#bookFiles').addEventListener('change', (e) => { uploadBooks(e.target.files); e.target.value = ''; });
+$('#bookFolder').addEventListener('change', (e) => { uploadBooks(e.target.files); e.target.value = ''; });
+$('#bookSelAll').addEventListener('change', (e) => {
+  document.querySelectorAll('.book-check').forEach(c => c.checked = e.target.checked);
+});
+
+async function convertBooks(ids) {
+  if (!ids.length) { toast('Select at least one book', 'bad'); return; }
+  if (!getFormats().length) { toast('Pick at least one output format', 'bad'); return; }
+  toast(`Queuing ${ids.length} book(s)…`);
+  let ok = 0;
+  for (const id of ids) {
+    const fd = new FormData();
+    appendSettings(fd);          // batch: no cast → backend auto-casts per book
+    fd.append('book_id', id);
+    try { if ((await fetch('/api/convert', { method: 'POST', body: fd })).ok) ok++; }
+    catch (e) {}
+  }
+  toast(`Queued ${ok} of ${ids.length} book(s) 🎬`, ok ? 'good' : 'bad');
+  refreshJobs();
+}
+$('#bookConvertAll').addEventListener('click', () => convertBooks(BOOKS.map(b => b.id)));
+$('#bookConvertSel').addEventListener('click', () => convertBooks(
+  Array.from(document.querySelectorAll('.book-check:checked')).map(c => c.value)));
 
 // ---------- jobs ----------
 async function refreshJobs() {
@@ -824,6 +931,7 @@ loadAmbience();
 loadPron();
 loadPresets();
 loadStories();
+loadBooks();
 checkSmartcast();
 refreshJobs();
 setInterval(refreshJobs, 1500);

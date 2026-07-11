@@ -62,6 +62,29 @@ Write or paste your story here. Use # Heading lines to split it into chapters.">
           <input type="file" id="fileInput" accept=".txt,.md,.markdown,.epub,.pdf,.docx" hidden />
         </div>
         <div id="fileChosen" class="file-chosen" hidden></div>
+        <div class="hint">One file here converts with the big <strong>Create audiobook</strong> button.
+          For many at once, use the library below.</div>
+
+        <div class="book-lib">
+          <div class="book-lib-head">
+            <strong>📚 Book library</strong>
+            <div class="book-lib-actions">
+              <label class="upload-mini">＋ Add files
+                <input type="file" id="bookFiles" accept=".txt,.md,.markdown,.epub,.pdf,.docx" multiple hidden /></label>
+              <label class="upload-mini">＋ Add folder
+                <input type="file" id="bookFolder" webkitdirectory multiple hidden /></label>
+            </div>
+          </div>
+          <div id="bookList" class="book-list"></div>
+          <div class="book-lib-foot">
+            <label class="book-selall"><input type="checkbox" id="bookSelAll" /> Select all</label>
+            <button id="bookConvertSel" class="ghost" type="button">Convert selected</button>
+            <button id="bookConvertAll" class="primary" type="button">Convert all</button>
+          </div>
+          <div class="hint">Stored in <code>/data/books</code> — you can also drop epubs straight into the
+            <code>appdata/vellichor/data/books</code> share and they'll appear here. Batch conversions use the
+            voice &amp; settings on the right (multi-voice auto-casts per book).</div>
+        </div>
       </div>
     </section>
 
@@ -166,7 +189,7 @@ Write or paste your story here. Use # Heading lines to split it into chapters.">
         <button id="previewBtn" class="ghost full">▶ Preview voice on this text</button>
         <button id="convertBtn" class="primary full">🎬 Create audiobook</button>
       </div>
-      <audio id="previewAudio" hidden></audio>
+      <audio id="previewAudio" class="full" controls hidden></audio>
     </aside>
   </main>
 
