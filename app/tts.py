@@ -119,7 +119,7 @@ class Engine:
         if os.path.exists(out) and os.path.getsize(out) > 0:
             return out
         import gpu
-        with gpu.LOCK:
+        with gpu.busy_guard():
             gpu.release_ollama()        # reclaim VRAM from Smart cast before TTS
             wav = self.synth_chunk(voicecat.SAMPLE_TEXT, voice, speed=1.0)
         tmp_wav = out.replace(".mp3", ".wav")

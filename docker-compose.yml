@@ -5,6 +5,11 @@ services:
     container_name: vellichor-web
     restart: unless-stopped
     runtime: nvidia
+    # Hard memory ceiling so a runaway conversion can never take down the whole
+    # (swapless) host — Docker OOM-kills just this container instead. The worker
+    # streams audio to disk, so steady-state use is well under this.
+    mem_limit: 12g
+    memswap_limit: 12g
     ports:
       - "7777:7777"
     environment:

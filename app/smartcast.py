@@ -133,7 +133,7 @@ def analyze(text: str):
 
     # Serialize against TTS and free Kokoro's VRAM first, so Ollama offloads the
     # model to the GPU instead of falling back to (very slow) CPU inference.
-    with gpu.LOCK:
+    with gpu.busy_guard():
         gpu.release_kokoro()
         try:
             _analyze_batches(text, segments, char_gender)

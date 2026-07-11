@@ -224,6 +224,8 @@ def voice_sample(voice: str):
         raise HTTPException(404, "Unknown voice")
     try:
         path = ENGINE.ensure_sample(voice)
+    except gpu.GpuBusy as e:
+        raise HTTPException(503, str(e))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(500, f"Sample generation failed: {e}")
     return FileResponse(path, media_type="audio/mpeg")
@@ -260,6 +262,8 @@ async def smartcast_analyze(request: Request):
                                  "the model is downloading). Try again shortly.")
     try:
         return await run_in_threadpool(smartcast.analyze, text)
+    except gpu.GpuBusy as e:
+        raise HTTPException(503, str(e))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(500, f"Smart cast failed: {e}")
 
@@ -341,6 +345,8 @@ async def preview(
     }
     try:
         mp3 = await run_in_threadpool(convert.render_preview, job_like, text, out_dir)
+    except gpu.GpuBusy as e:
+        raise HTTPException(503, str(e))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(500, f"Preview failed: {e}")
     return FileResponse(mp3, media_type="audio/mpeg",
@@ -528,7 +534,9 @@ def download(jid: str, name: str):
 
 
 @app.get("/healthz")
-def health():
+async def health():
+    # Async so the liveness probe answers off the event loop — a long conversion
+    # holding the GPU can park every sync/threadpool worker, but this must not lie.
     return {"ok": True, "device": ENGINE.device}
 
 

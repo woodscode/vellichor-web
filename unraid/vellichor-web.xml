@@ -13,7 +13,7 @@
   <Category>MediaApp:Books Productivity:</Category>
   <WebUI>http://[IP]:[PORT:7777]/</WebUI>
   <Icon>https://raw.githubusercontent.com/woodscode/vellichor-web/main/unraid/icon.png</Icon>
-  <ExtraParams>--runtime=nvidia</ExtraParams>
+  <ExtraParams>--runtime=nvidia --memory=12g</ExtraParams>
   <PostArgs/>
   <DonateText/>
   <DonateLink/>

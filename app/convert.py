@@ -201,7 +201,7 @@ def render_preview(job_like: dict, text: str, out_dir: str) -> str:
     speed = float(job_like.get("speed", 1.0))
     exag = float(job_like.get("exaggeration", 0.5))
     snippet = pron.apply(directives.strip(text or "")).strip()[:500] or "Hello there."
-    with gpu.LOCK:
+    with gpu.busy_guard():
         gpu.release_ollama()
         if engine_id == "chatterbox":
             ref = _resolve_reference(job_like, job_like.get("voice"), out_dir)
@@ -299,37 +299,45 @@ def run(job: dict, progress) -> dict:
             ENGINE.unload()          # hand the GPU to Chatterbox (can't coexist on 8 GB)
         try:
             for idx, ch in enumerate(chapters):
-                # A short settle before each new chapter/title so it doesn't run
-                # straight into the tail of the previous one.
-                parts = [GAP] if idx > 0 else []
-                prev_voice = None
-                for op in ch["ops"]:
-                    if job.get("cancel"):
-                        raise Cancelled()
-                    if op["kind"] == "pause":
-                        parts.append(_silence(op["seconds"]))
-                        prev_voice = None    # a pause already separates speakers
-                        continue
-                    # Only gap between *different* speakers — a character with
-                    # several lines in a row flows as one continuous turn.
-                    if multivoice and prev_voice is not None and op["voice"] != prev_voice:
-                        parts.append(SEG_GAP)
-                    say = pron.apply(op["text"])          # user pronunciation fixes
-                    parts.append(synth.synth_chunk(
-                        say, op["voice"], op["speed"],
-                        exaggeration=op.get("exaggeration", exaggeration),
-                        reference_path=reference_path))
-                    prev_voice = op["voice"]
-                    done += 1
-                    elapsed = time.time() - t0
-                    rate = done / elapsed if elapsed > 0 else 0
-                    eta = int((total_chunks - done) / rate) if rate > 0 else None
-                    pct = 4 + int(done / total_chunks * 76)
-                    progress(stage=f"Narrating: {ch['title']}", percent=pct,
-                             chapters_done=idx, chunks_done=done, eta=eta)
-                audio = np.concatenate(parts) if parts else np.zeros(0, dtype="float32")
+                # Stream each chunk straight to the chapter WAV rather than holding
+                # the whole chapter in RAM. A book with no headings is one giant
+                # "chapter" (a PDF, or pasted prose without '#' markers, is always a
+                # single chapter); accumulating all of its audio in a list and then
+                # np.concatenate()-ing a second contiguous copy could spike to
+                # several GB and OOM the (swapless) host. Writing incrementally caps
+                # live memory to one ~500-char chunk regardless of book length.
                 wav_path = os.path.join(workdir, f"ch{idx:03d}.wav")
-                sf.write(wav_path, audio, SAMPLE_RATE)
+                with sf.SoundFile(wav_path, mode="w", samplerate=SAMPLE_RATE,
+                                  channels=1, subtype="PCM_16") as out:
+                    # A short settle before each new chapter/title so it doesn't run
+                    # straight into the tail of the previous one.
+                    if idx > 0:
+                        out.write(GAP)
+                    prev_voice = None
+                    for op in ch["ops"]:
+                        if job.get("cancel"):
+                            raise Cancelled()
+                        if op["kind"] == "pause":
+                            out.write(_silence(op["seconds"]))
+                            prev_voice = None    # a pause already separates speakers
+                            continue
+                        # Only gap between *different* speakers — a character with
+                        # several lines in a row flows as one continuous turn.
+                        if multivoice and prev_voice is not None and op["voice"] != prev_voice:
+                            out.write(SEG_GAP)
+                        say = pron.apply(op["text"])          # user pronunciation fixes
+                        out.write(synth.synth_chunk(
+                            say, op["voice"], op["speed"],
+                            exaggeration=op.get("exaggeration", exaggeration),
+                            reference_path=reference_path))
+                        prev_voice = op["voice"]
+                        done += 1
+                        elapsed = time.time() - t0
+                        rate = done / elapsed if elapsed > 0 else 0
+                        eta = int((total_chunks - done) / rate) if rate > 0 else None
+                        pct = 4 + int(done / total_chunks * 76)
+                        progress(stage=f"Narrating: {ch['title']}", percent=pct,
+                                 chapters_done=idx, chunks_done=done, eta=eta)
                 chapter_wavs.append({"path": wav_path, "title": ch["title"]})
         finally:
             if engine_id == "chatterbox":
