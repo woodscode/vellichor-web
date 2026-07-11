@@ -50,8 +50,14 @@ PUBLIC_PATHS = {"/login", "/api/login", "/favicon.ico", "/healthz"}
 @app.middleware("http")
 async def auth_guard(request: Request, call_next):
     path = request.url.path
-    if (not auth.ENABLED or path in PUBLIC_PATHS
-            or path.startswith("/static/")):
+    if path.startswith("/static/"):
+        # Static assets are public, but tell the browser to revalidate every
+        # load (cheap 304s via ETag). Without this, browsers heuristically cache
+        # app.js/style.css and serve stale UI after a deploy.
+        resp = await call_next(request)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+    if not auth.ENABLED or path in PUBLIC_PATHS:
         return await call_next(request)
     if not auth.is_authed(request):
         if path.startswith("/api/"):

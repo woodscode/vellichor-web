@@ -84,6 +84,10 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+/* The `hidden` attribute must always win, even over components that set their
+   own display (e.g. .file-chosen { display:flex }) — otherwise a toggled-off
+   element like the empty file-chosen box would still show. */
+[hidden] { display: none !important; }
 html, body { margin: 0; padding: 0; }
 body {
   background: var(--app-bg);
@@ -165,15 +169,16 @@ textarea.field { font-family: inherit; }
 
 /* ---- book library ---- */
 .book-lib { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
-.book-lib-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-.book-lib-actions { display: flex; gap: 8px; }
+.book-lib-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.book-lib-head strong { font-size: 1rem; }
+.book-lib-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .book-list { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; }
 .book-row { display: flex; align-items: center; gap: 8px; padding: 7px 9px; cursor: pointer;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; }
 .book-row:hover { border-color: var(--accent-2); }
 .book-row .book-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .book-row .book-size { flex: 0 0 auto; }
-.book-lib-foot { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.book-lib-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
 .book-selall { display: flex; align-items: center; gap: 6px; margin-right: auto; color: var(--muted); font-size: .85rem; }
 
 /* ---- voices ---- */
