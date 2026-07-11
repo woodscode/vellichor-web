@@ -816,15 +816,30 @@ $('#presetApply').addEventListener('click', () => {
   if (!p) { toast('Pick a preset', 'bad'); return; }
   applySettings(p.settings); toast('Preset applied', 'good');
 });
+// Selecting a preset fills its name into the box, so tweaking its settings and
+// hitting Save updates that preset (instead of making a duplicate).
+$('#presetSelect').addEventListener('change', () => {
+  const p = PRESETS.find(x => x.id === $('#presetSelect').value);
+  $('#presetName').value = p ? p.name : '';
+});
 $('#presetSave').addEventListener('click', async () => {
   const name = $('#presetName').value.trim();
   if (!name) { toast('Name the preset first', 'bad'); return; }
+  const sel = $('#presetSelect').value;
+  const selName = (PRESETS.find(p => p.id === sel) || {}).name || '';
+  const body = { name, settings: gatherSettings() };
+  // update the selected preset when its name is unchanged; otherwise the
+  // backend still dedupes by name so we never pile up copies
+  if (sel && selName.toLowerCase() === name.toLowerCase()) body.id = sel;
   const r = await fetch('/api/presets', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, settings: gatherSettings() }),
+    body: JSON.stringify(body),
   });
-  if (r.ok) { $('#presetName').value = ''; await loadPresets(); toast('Preset saved', 'good'); }
-  else toast('Could not save preset', 'bad');
+  if (!r.ok) { toast('Could not save preset', 'bad'); return; }
+  const rec = await r.json();
+  await loadPresets();
+  $('#presetSelect').value = rec.id;
+  toast(rec.updated ? `Updated “${rec.name}”` : `Saved “${rec.name}”`, 'good');
 });
 $('#presetDel').addEventListener('click', async () => {
   const id = $('#presetSelect').value;

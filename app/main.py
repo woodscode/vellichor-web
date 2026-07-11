@@ -223,7 +223,7 @@ def presets_list():
 async def presets_add(request: Request):
     body = await request.json()
     try:
-        rec = presets.save(body.get("name", ""), body.get("settings", {}))
+        rec = presets.save(body.get("name", ""), body.get("settings", {}), body.get("id"))
     except ValueError as e:
         raise HTTPException(400, str(e))
     return rec

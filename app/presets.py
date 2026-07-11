@@ -29,15 +29,29 @@ def list_all():
     return _load()
 
 
-def save(name: str, settings: dict) -> dict:
+def save(name: str, settings: dict, pid: str = None) -> dict:
     name = (name or "").strip()[:60]
     if not name:
         raise ValueError("Preset needs a name")
     if not isinstance(settings, dict):
         raise ValueError("Invalid settings")
-    pid = uuid.uuid4().hex[:12]
-    rec = {"id": pid, "name": name, "settings": settings, "created": int(time.time())}
     items = _load()
+    # Update in place — by explicit id, else by matching name (case-insensitive)
+    # — so re-saving overwrites rather than piling up duplicates.
+    target = None
+    if pid:
+        target = next((p for p in items if p.get("id") == pid), None)
+    if target is None:
+        target = next((p for p in items
+                       if p.get("name", "").lower() == name.lower()), None)
+    if target is not None:
+        target["name"] = name
+        target["settings"] = settings
+        target["updated"] = int(time.time())
+        _write(items)
+        return target
+    rec = {"id": uuid.uuid4().hex[:12], "name": name, "settings": settings,
+           "created": int(time.time())}
     items.append(rec)
     _write(items)
     return rec
